@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ShieldAlert, Phone, Plus, AlertTriangle, Lightbulb, CheckCircle2 } from "lucide-react-native";
+import { ShieldAlert, Phone, Plus, AlertTriangle, Lightbulb, CheckCircle2, Trash2 } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -8,12 +9,59 @@ import { TopBar } from "@/components/app/TopBar";
 import { Button } from "@/components/ui/Button";
 import { StatusBanner } from "@/components/app/EmptyState";
 import { Textarea } from "@/components/ui/Textarea";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import { useToast } from "@/components/ui/Toast";
-import { emergencyContacts, safetyTips } from "@/data/mock";
+import { useAuth } from "@/context/AuthContext";
+import { validateEmergencyContact } from "@/lib/validation";
+import { safetyTips } from "@/data/mock";
 
 export default function Safety() {
   const router = useRouter();
   const toast = useToast();
+  const { profile, saveEmergencyContact, removeEmergencyContact, busy } = useAuth();
+
+  const contact = profile?.emergencyContact ?? null;
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [relationship, setRelationship] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const startEditing = () => {
+    setName(contact?.name ?? "");
+    setPhone(contact?.phone ?? "");
+    setRelationship(contact?.relationship ?? "");
+    setFormError(null);
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    const validationError = validateEmergencyContact({ name, phone, relationship });
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+    setFormError(null);
+    try {
+      await saveEmergencyContact({ name: name.trim(), phone: phone.trim(), relationship: relationship.trim() });
+      setEditing(false);
+      toast.success("Emergency contact saved");
+    } catch {
+      setFormError("Couldn't save the contact right now. Please try again.");
+    }
+  };
+
+  const handleRemove = async () => {
+    setFormError(null);
+    try {
+      await removeEmergencyContact();
+      setEditing(false);
+      toast.success("Emergency contact removed");
+    } catch {
+      setFormError("Couldn't remove the contact right now. Please try again.");
+    }
+  };
 
   return (
     <PhoneShell>
@@ -68,35 +116,97 @@ export default function Safety() {
 
           <View style={[styles.card]}>
             <AppText size="sm" weight={600} style={{ marginBottom: 12 }}>
-              Emergency contacts
+              Emergency contact
             </AppText>
-            {emergencyContacts.map((c, i) => (
-              <View
-                key={c.name}
-                style={[
-                  { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-                  i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
-                ]}
-              >
-                <View style={{ height: 36, width: 36, borderRadius: radius.xl, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
-                  <Phone size={16} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText size="sm" weight={500} numberOfLines={1}>
-                    {c.name}
+
+            {!editing ? (
+              contact ? (
+                <>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }}>
+                    <View style={{ height: 36, width: 36, borderRadius: radius.xl, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+                      <Phone size={16} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <AppText size="sm" weight={500} numberOfLines={1}>
+                        {contact.name}
+                      </AppText>
+                      <AppText size="xs" color={colors.mutedForeground}>
+                        {contact.relationship} · {contact.phone}
+                      </AppText>
+                    </View>
+                    <Pressable onPress={() => startEditing()} hitSlop={8}>
+                      <AppText size="xs" weight={600} color={colors.primary}>
+                        Edit
+                      </AppText>
+                    </Pressable>
+                  </View>
+                  <Button variant="ghost" block style={{ height: 40, borderRadius: 16 }} onPress={handleRemove} disabled={busy}>
+                    <Trash2 size={14} color={colors.destructive} />
+                    <AppText size="sm" weight={600} color={colors.destructive}>
+                      Remove contact
+                    </AppText>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <AppText size="xs" color={colors.mutedForeground} style={{ lineHeight: 18 }}>
+                    Add someone you trust — SOS alerts and share-trip updates go to them.
                   </AppText>
-                  <AppText size="xs" color={colors.mutedForeground}>
-                    {c.relation} · {c.phone}
-                  </AppText>
+                  <Button variant="secondary" block style={{ marginTop: 12, height: 44, borderRadius: 16 }} onPress={startEditing}>
+                    <Plus size={16} color={colors.secondaryForeground} />
+                    <AppText size="sm" weight={600} color={colors.secondaryForeground}>
+                      Add contact
+                    </AppText>
+                  </Button>
+                </>
+              )
+            ) : (
+              <View style={{ gap: 14 }}>
+                <View style={{ gap: 8 }}>
+                  <Label>Name</Label>
+                  <Input
+                    style={{ height: 44, borderRadius: radius.lg, backgroundColor: colors.background }}
+                    placeholder="e.g. Amina Yusuf"
+                    value={name}
+                    onChangeText={setName}
+                  />
                 </View>
+                <View style={{ gap: 8 }}>
+                  <Label>Phone number</Label>
+                  <Input
+                    style={{ height: 44, borderRadius: radius.lg, backgroundColor: colors.background }}
+                    placeholder="+234 800 000 0000"
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                  />
+                </View>
+                <View style={{ gap: 8 }}>
+                  <Label>Relationship</Label>
+                  <Input
+                    style={{ height: 44, borderRadius: radius.lg, backgroundColor: colors.background }}
+                    placeholder="e.g. Parent, Partner, Friend"
+                    value={relationship}
+                    onChangeText={setRelationship}
+                  />
+                </View>
+                {formError ? (
+                  <AppText size="xs" color={colors.destructive} style={{ lineHeight: 18 }}>
+                    {formError}
+                  </AppText>
+                ) : null}
+                <Button block style={{ height: 44, borderRadius: 16 }} disabled={busy} onPress={handleSave}>
+                  <AppText size="sm" weight={600} color={colors.primaryForeground}>
+                    {busy ? "Saving…" : "Save contact"}
+                  </AppText>
+                </Button>
+                <Button variant="ghost" block style={{ height: 40, borderRadius: 16 }} onPress={() => setEditing(false)}>
+                  <AppText size="sm" color={colors.mutedForeground}>
+                    Cancel
+                  </AppText>
+                </Button>
               </View>
-            ))}
-            <Button variant="secondary" block style={{ marginTop: 12, height: 44, borderRadius: 16 }}>
-              <Plus size={16} color={colors.secondaryForeground} />
-              <AppText size="sm" weight={600} color={colors.secondaryForeground}>
-                Add contact
-              </AppText>
-            </Button>
+            )}
           </View>
 
           <View style={[styles.card]}>
