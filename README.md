@@ -89,6 +89,27 @@ src/
   `reliabilityScore`) are stored with defaults and calculated by the rides
   feature in a later phase.
 
+## Identity verification (Phase 4)
+
+- **Verification screen** (`app/(app)/verification.tsx`): Government ID and
+  Student ID flows with live status — upload documents (front/back/selfie
+  for IDs; student card or university email for students), pending /
+  approved / rejected (with the admin's reason) / expired cards, and
+  "Submit again" resubmission after a rejection.
+- **Private document storage**: documents upload to the
+  `verification-documents` bucket (10 MB jpeg/png/webp) under
+  `verification/<user-id>/…` — invisible to everyone except the owner and
+  admins (RLS). Only object paths are stored; rendering uses signed URLs.
+- **Service** (`src/services/verification.ts`): upload + submit/resubmit
+  RPCs (`submit_verification`, `resubmit_verification`,
+  `get_my_verification`) with friendly error mapping, and `isUserVerified()`
+  — the gate for ride creation/joining once rides ship.
+- **Review is backend-only** (no admin UI): admins are promoted in
+  `admin_users` via SQL and review through `admin_list_verifications` /
+  `admin_review_verification` RPCs; approval flips the profile badge
+  (`verification_status = Verified` + `isGovernmentIdVerified` /
+  `isStudentVerified`).
+
 See `../covia-backend/docs/DATABASE_SCHEMA.md` for the schema and
 `../covia-backend/docs/SUPABASE_SETUP.md` for setup + the manual test
 checklist.
