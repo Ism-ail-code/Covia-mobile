@@ -71,5 +71,24 @@ src/
 - **Forgot password** → reset email (`companion://reset`) → new password.
 - All screens use `useAuth()` — no duplicated auth logic.
 
-See `../covia-backend/docs/SUPABASE_SETUP.md` for the database schema and
-manual test checklist.
+## Profile system (Phase 3)
+
+- **Profile** (Create-profile screen): display name, unique username
+  (3–20 chars, `[a-z0-9_]`, reserved names protected, availability RPC),
+  home city, country, bio — plus profile photo upload (expo-image-picker →
+  Supabase Storage `avatars` bucket, 5 MB jpeg/png/webp, replaced on
+  re-upload, only the public URL stored).
+- **Emergency contact** (Safety centre): add / edit / remove, validated
+  all-or-nothing record; SOS alerts route to it later.
+- **Public vs private**: `src/types/profile.ts` defines `UserProfile`
+  (private) and `PublicProfile` (public). Other users only ever read the
+  `public_profiles` view (`get_public_profile` / `search_profiles` RPCs) —
+  email, phone, DOB, gender and emergency contacts never leave the private
+  row (RLS).
+- **Reliability metrics** (`totalCompletedRides`, `totalCancelledRides`,
+  `reliabilityScore`) are stored with defaults and calculated by the rides
+  feature in a later phase.
+
+See `../covia-backend/docs/DATABASE_SCHEMA.md` for the schema and
+`../covia-backend/docs/SUPABASE_SETUP.md` for setup + the manual test
+checklist.
