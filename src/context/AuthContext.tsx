@@ -6,6 +6,8 @@
  *   - keep the session fresh (Supabase auto-refreshes access tokens)
  *   - centralize sign-up / sign-in / sign-out / password reset / resend
  *   - auto-create the user profile after signup (DB trigger + fallback)
+ *   - profile management: identity fields, username, avatar URL,
+ *     emergency contact (Phase 3)
  *   - handle confirmation/reset deep links (PKCE code exchange)
  *   - expose `status`, `session`, `user`, `profile`, `emailVerified`
  *
@@ -25,8 +27,16 @@ import {
 import * as Linking from "expo-linking";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "../services/supabase";
-import { ensureProfile, fetchProfile, updateProfile } from "../services/profiles";
-import type { UserProfile } from "../types/profile";
+import {
+  clearEmergencyContact,
+  ensureProfile,
+  fetchProfile,
+  setEmergencyContact,
+  updateProfile,
+  updateUsername,
+  type ProfilePatch,
+} from "../services/profiles";
+import type { EmergencyContact, UserProfile } from "../types/profile";
 import { AuthErrorDisplay, toFriendlyAuthError } from "../services/authErrors";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -56,9 +66,10 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
   refreshProfile: () => Promise<UserProfile | null>;
-  updateProfilePatch: (
-    patch: Parameters<typeof updateProfile>[1],
-  ) => Promise<UserProfile>;
+  updateProfilePatch: (patch: ProfilePatch) => Promise<UserProfile>;
+  changeUsername: (username: string) => Promise<UserProfile>;
+  saveEmergencyContact: (contact: EmergencyContact) => Promise<UserProfile>;
+  removeEmergencyContact: () => Promise<UserProfile>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -272,7 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, loadProfile]);
 
   const updateProfilePatch = useCallback(
-    async (patch: Parameters<typeof updateProfile>[1]) => {
+    async (patch: ProfilePatch) => {
       if (!session) throw new AuthErrorDisplay("You need to be logged in.");
       const updated = await updateProfile(session.user.id, patch);
       setProfile(updated);
@@ -280,6 +291,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [session],
   );
+
+  const changeUsername = useCallback(
+    async (username: string) => {
+      if (!session) throw new AuthErrorDisplay("You need to be logged in.");
+      const updated = await updateUsername(session.user.id, username);
+      setProfile(updated);
+      return updated;
+    },
+    [session],
+  );
+
+  const saveEmergencyContact = useCallback(
+    async (contact: EmergencyContact) => {
+      if (!session) throw new AuthErrorDisplay("You need to be logged in.");
+      const updated = await setEmergencyContact(session.user.id, contact);
+      setProfile(updated);
+      return updated;
+    },
+    [session],
+  );
+
+  const removeEmergencyContact = useCallback(async () => {
+    if (!session) throw new AuthErrorDisplay("You need to be logged in.");
+    const updated = await clearEmergencyContact(session.user.id);
+    setProfile(updated);
+    return updated;
+  }, [session]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -296,6 +334,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendVerification,
       refreshProfile,
       updateProfilePatch,
+      changeUsername,
+      saveEmergencyContact,
+      removeEmergencyContact,
     }),
     [
       status,
@@ -310,6 +351,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendVerification,
       refreshProfile,
       updateProfilePatch,
+      changeUsername,
+      saveEmergencyContact,
+      removeEmergencyContact,
     ],
   );
 
