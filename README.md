@@ -86,8 +86,8 @@ src/
   email, phone, DOB, gender and emergency contacts never leave the private
   row (RLS).
 - **Reliability metrics** (`totalCompletedRides`, `totalCancelledRides`,
-  `reliabilityScore`) are stored with defaults and calculated by the rides
-  feature in a later phase.
+  `reliabilityScore`) are stored with defaults; `complete_ride` /
+  `cancel_ride` (Phase 5) maintain the ride counters.
 
 ## Identity verification (Phase 4)
 
@@ -103,12 +103,33 @@ src/
 - **Service** (`src/services/verification.ts`): upload + submit/resubmit
   RPCs (`submit_verification`, `resubmit_verification`,
   `get_my_verification`) with friendly error mapping, and `isUserVerified()`
-  — the gate for ride creation/joining once rides ship.
+  — the gate for ride creation/joining.
 - **Review is backend-only** (no admin UI): admins are promoted in
   `admin_users` via SQL and review through `admin_list_verifications` /
   `admin_review_verification` RPCs; approval flips the profile badge
   (`verification_status = Verified` + `isGovernmentIdVerified` /
   `isStudentVerified`).
+
+## Rides (Phase 5)
+
+- **Models** (`src/types/ride.ts`): `Ride`, `RideRequest`,
+  `RideParticipant`, `RideTimelineEvent` mirroring migrations 0009–0013;
+  status/fare/event label maps for UI; `RideSearchFilters`.
+- **Service** (`src/services/rides.ts`): every RPC — create/publish/update
+  (host), request/withdraw/leave (passenger), respond (host),
+  start/complete/cancel (host), search/get/requests/participants/timeline
+  (read). Client-side `validateRideInput` matches the server rules;
+  `RideError` maps SQLSTATEs and messages to friendly text. Numeric
+  columns (numeric/bigint) are cast from strings.
+- **Rules enforced server-side**: verified-only creation/joining; manual
+  host approval (no instant join); capacity checks (last seat → `full`);
+  no overlapping rides within 6h; seats can't drop below approved
+  passengers; host-only lifecycle edits; every state change lands in the
+  ride timeline.
+- **Screens are not wired yet** — the existing `(tabs)/create.tsx` and
+  `explore.tsx` still show mock-data UIs. Wire them to this service when
+  the ride UI phase starts.
+- Ride RPC reference: `../covia-backend/docs/API_DOCUMENTATION.md`.
 
 See `../covia-backend/docs/DATABASE_SCHEMA.md` for the schema and
 `../covia-backend/docs/SUPABASE_SETUP.md` for setup + the manual test
