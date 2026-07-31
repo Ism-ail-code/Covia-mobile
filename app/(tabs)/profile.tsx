@@ -58,8 +58,14 @@ export default function Profile() {
               <AppText size="xl" family="display" weight={800} style={{ marginTop: 12 }}>
                 {displayName}
               </AppText>
-              <AppText size="xs" color={colors.mutedForeground}>
+              {profile?.username ? (
+                <AppText size="xs" weight={600} color={colors.primary}>
+                  @{profile.username}
+                </AppText>
+              ) : null}
+              <AppText size="xs" color={colors.mutedForeground} style={{ marginTop: 2 }}>
                 Joined {currentUser.joined} · {homeCity}
+                {profile?.country ? `, ${profile.country}` : ""}
               </AppText>
               <View style={{ marginTop: 12 }}>
                 {emailVerified && profile?.verificationStatus === "Verified" ? (
