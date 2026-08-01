@@ -31,6 +31,10 @@ export type NotificationType =
   | "email_verified"
   | "safety_check"
   | "emergency_alert"
+  | "warning_issued"
+  | "account_restricted"
+  | "appeal_decided"
+  | "report_resolved"
   | "marketing";
 
 export type AppNotification = {
