@@ -113,19 +113,29 @@ src/
 ## Rides (Phase 5)
 
 - **Models** (`src/types/ride.ts`): `Ride`, `RideRequest`,
-  `RideParticipant`, `RideTimelineEvent` mirroring migrations 0009–0013;
-  status/fare/event label maps for UI; `RideSearchFilters`.
-- **Service** (`src/services/rides.ts`): every RPC — create/publish/update
-  (host), request/withdraw/leave (passenger), respond (host),
-  start/complete/cancel (host), search/get/requests/participants/timeline
-  (read). Client-side `validateRideInput` matches the server rules;
+  `RideParticipant`, `RideTimelineEvent`, `RideLocation` (structured
+  locations: display name + optional lat/lng/place id),
+  `PickupType` + labels, `RideHistoryEntry`/`RideHistoryRelation`
+  mirroring migrations 0009–0016; status/fare/event label maps for UI
+  (incl. `expired` status and `dropped`/`expired` events);
+  `RideSearchFilters`.
+- **Service** (`src/services/rides.ts`): every RPC — create (structured
+  locations + pickup type + optional visibility schedule)/publish/update/
+  delete-draft (host), request/withdraw/leave (passenger), respond/
+  remove-passenger (host), start/complete/cancel (host),
+  search/get/requests/participants/timeline/history (read). Client-side
+  `validateRideInput` matches the server rules (locations, pickup
+  point must be a public place, visibility before departure);
   `RideError` maps SQLSTATEs and messages to friendly text. Numeric
   columns (numeric/bigint) are cast from strings.
 - **Rules enforced server-side**: verified-only creation/joining; manual
   host approval (no instant join); capacity checks (last seat → `full`);
   no overlapping rides within 6h; seats can't drop below approved
-  passengers; host-only lifecycle edits; every state change lands in the
-  ride timeline.
+  passengers; host-only lifecycle edits; pickup points must be
+  public places (main road/landmark/university/bus stop/metro
+  station/shopping centre); rides left unpublished past departure
+  auto-expire (pg_cron + lazily on read); every state change lands in
+  the ride timeline.
 - **Screens are not wired yet** — the existing `(tabs)/create.tsx` and
   `explore.tsx` still show mock-data UIs. Wire them to this service when
   the ride UI phase starts.
