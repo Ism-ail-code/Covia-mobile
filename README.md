@@ -144,7 +144,7 @@ src/
 ## Notifications (Phase 6)
 
 - **Models** (`src/types/notifications.ts`): `AppNotification` (feed
-  row with `totalCount`), `NotificationType` union (23 types),
+  row with `totalCount`), `NotificationType` union (27 types),
   `NotificationPage`, `NotificationPreferences` (incl. `chatEnabled`).
 - **Service** (`src/services/notifications.ts`): paged feed with
   unread filter, unread badge count, mark-read (single/all), delete,
@@ -183,6 +183,31 @@ src/
   device helpers (`requestLocationPermission`, `getCurrentPosition`).
 - Depends on `expo-location` (~57.0.7) + `expo-local-authentication`
   (~57.0.2), configured in `app.json` with usage-description copy.
+
+## Trust (Phase 9)
+
+- **Models** (`src/types/trust.ts`): `Rating` + `RatingInput` (integer
+  stars 1–5), `RideRatingStatus` (per-counterpart status),
+  `UserRating`/`UserRatingPage` (profile reviews block), `Report`
+  (7 reasons, target user/ride), `Appeal`, `ModerationActionType`,
+  `ModerationStatus` (`isSuspended`, `canCreateRides`,
+  `canJoinRides`, `restrictions[]`), `TrustSummary` (private, with
+  report counts) / `PublicTrustSummary` (profile subset),
+  `TrustConfig` (review window).
+- **Service** (`src/services/trust.ts`): `getRideRatingStatus` +
+  `rateRide`/`updateRating`/`deleteRating` (double-blind — hidden until
+  the counterpart rates or the window expires), `getUserRatings`,
+  `getTrustConfig` (countdown), `getMyTrustSummary`/
+  `getPublicTrustSummary`, `getMyModerationStatus`, `reportUser`/
+  `reportRide` (confidential), `getMyReports`, `submitAppeal`/
+  `updateAppeal`/`getMyAppeals` — with a friendly `TrustError` mapping.
+- `src/types/notifications.ts` gained the four Phase 9 types:
+  `warning_issued`, `account_restricted`, `appeal_decided`,
+  `report_resolved`.
+- **UX notes**: ratings are edited/withdrawn only while hidden; revealed
+  ones are immutable. Gate ride creation/joining UI on
+  `getMyModerationStatus`; surface active restrictions with their
+  `endsAt` and link to an appeal screen.
 
 See `../covia-backend/docs/DATABASE_SCHEMA.md` for the schema and
 `../covia-backend/docs/SUPABASE_SETUP.md` for setup + the manual test
