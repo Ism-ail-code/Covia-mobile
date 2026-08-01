@@ -141,6 +141,49 @@ src/
   the ride UI phase starts.
 - Ride RPC reference: `../covia-backend/docs/API_DOCUMENTATION.md`.
 
+## Notifications (Phase 6)
+
+- **Models** (`src/types/notifications.ts`): `AppNotification` (feed
+  row with `totalCount`), `NotificationType` union (23 types),
+  `NotificationPage`, `NotificationPreferences` (incl. `chatEnabled`).
+- **Service** (`src/services/notifications.ts`): paged feed with
+  unread filter, unread badge count, mark-read (single/all), delete,
+  preferences read/update (coalescing — only provided values change),
+  push-token registration (`android`/`ios`), and a `postgres_changes`
+  subscription on `notifications` for live rows.
+- The feed is **read-only by design**: every mutation goes through a
+  security-definer RPC (RLS has no write grants).
+
+## Ride chat (Phase 7)
+
+- **Models** (`src/types/chat.ts`): `Chat` (ride context +
+  `participantCount`), `ChatMessage` (text/image, soft delete,
+  edit timestamps, `readCount`), `ChatMessagePage`.
+- **Service** (`src/services/chat.ts`): `getChat`, message feed with
+  cursor pagination (`p_before` = oldest loaded `sentAt`; newest-first),
+  `sendChatMessage` (text ≤ 2000 chars) / `sendChatImage` (`media_url`),
+  edit/delete own messages, `markMessagesRead(through)`,
+  `searchChatMessages`, realtime subscriptions on `chat_messages` +
+  `message_reads` (filtered by `chat_id`).
+- Archive/lock rules are enforced server-side: the chat closes when the
+  ride ends and locks 2h later — sends fail with friendly errors.
+
+## Safety (Phase 8)
+
+- **Models** (`src/types/safety.ts`): `EmergencyContact`,
+  `SafetyConfig`, `SafetyEvent`, `LiveLocation`, `RideMonitoring`,
+  safety realtime payloads and severities.
+- **Service** (`src/services/safety.ts`): emergency contact CRUD
+  (validated phone), `triggerSos`, `respondSafetyCheck` (gated behind
+  `unlockWithBiometrics` for the "I'm safe" path), live-location
+  sharing with an **offline queue** (`covia.safety.liveLocationQueue`
+  in AsyncStorage, flushed on reconnect), `stopLiveLocation`,
+  `setPlannedRoute`, suspend/resume monitoring, incident reports,
+  realtime subscriptions on `live_locations` + `safety_events`, and
+  device helpers (`requestLocationPermission`, `getCurrentPosition`).
+- Depends on `expo-location` (~57.0.7) + `expo-local-authentication`
+  (~57.0.2), configured in `app.json` with usage-description copy.
+
 See `../covia-backend/docs/DATABASE_SCHEMA.md` for the schema and
 `../covia-backend/docs/SUPABASE_SETUP.md` for setup + the manual test
 checklist.
