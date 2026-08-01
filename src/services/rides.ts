@@ -1,17 +1,23 @@
 /**
- * Ride service — creation, publishing, requests, lifecycle, discovery.
+ * Ride service — creation, publishing, requests, lifecycle, discovery,
+ * history.
  *
- * Talks to the Phase 5 Supabase backend (migrations 0009–0013). All
+ * Talks to the Phase 5 Supabase backend (migrations 0009–0016). All
  * writes go through security-definer RPCs; the client only ever reads
  * through the read functions (search_rides, get_ride, get_ride_requests,
- * get_ride_participants, get_ride_timeline) because RLS grants the
- * client SELECT only on the tables.
+ * get_ride_participants, get_ride_timeline, get_ride_history) because
+ * RLS grants the client SELECT only on the tables.
  */
 
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type {
   CreateRideInput,
+  PickupType,
   Ride,
+  RideHistoryEntry,
+  RideHistoryRelation,
+  RideHistoryResult,
+  RideLocation,
   RideParticipant,
   RideRequest,
   RideRequestWithPassenger,
@@ -20,6 +26,17 @@ import type {
   RideTimelineEvent,
   UpdateRideChanges,
 } from "../types/ride";
+
+const PICKUP_TYPES: PickupType[] = [
+  "main_road",
+  "landmark",
+  "university",
+  "bus_stop",
+  "metro_station",
+  "shopping_center",
+];
+
+const HISTORY_RELATIONS: RideHistoryRelation[] = ["hosted", "joined", "requested"];
 
 export class RideError extends Error {
   constructor(message: string) {
@@ -35,6 +52,13 @@ type RideRow = {
   destination: string;
   pickup_point: string;
   destination_point: string | null;
+  pickup_type: string | null;
+  origin_loc: RideLocation | null;
+  destination_loc: RideLocation | null;
+  pickup_point_loc: RideLocation | null;
+  destination_point_loc: RideLocation | null;
+  smart_fare_details: Record<string, unknown> | null;
+  visible_at: string | null;
   origin_lat: string | null;
   origin_lng: string | null;
   destination_lat: string | null;
@@ -53,6 +77,7 @@ type RideRow = {
   host_display_name: string | null;
   host_avatar_url: string | null;
   host_rating: string | null;
+  host_verified: boolean | null;
   distance_km: string | null;
   total_count: string | null;
   created_at: string;
@@ -71,6 +96,13 @@ function mapRide(row: RideRow): Ride {
     destination: row.destination,
     pickupPoint: row.pickup_point,
     destinationPoint: row.destination_point,
+    pickupType: (row.pickup_type as Ride["pickupType"]) ?? null,
+    originLoc: row.origin_loc,
+    destinationLoc: row.destination_loc,
+    pickupPointLoc: row.pickup_point_loc,
+    destinationPointLoc: row.destination_point_loc,
+    smartFareDetails: row.smart_fare_details,
+    visibleAt: row.visible_at,
     originLat: toNullableNumber(row.origin_lat),
     originLng: toNullableNumber(row.origin_lng),
     destinationLat: toNullableNumber(row.destination_lat),
@@ -89,6 +121,7 @@ function mapRide(row: RideRow): Ride {
     hostDisplayName: row.host_display_name,
     hostAvatarUrl: row.host_avatar_url,
     hostRating: toNullableNumber(row.host_rating),
+    hostVerified: row.host_verified,
     distanceKm: toNullableNumber(row.distance_km),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -183,6 +216,57 @@ function mapSingleRide(data: unknown): Ride {
   return mapRide(data as RideRow);
 }
 
+type HistoryRow = {
+  ride_id: string;
+  relation: RideHistoryRelation;
+  user_id: string;
+  origin: string;
+  destination: string;
+  departure_time: string;
+  ride_status: Ride["rideStatus"];
+  request_status: string | null;
+  fare_mode: Ride["fareMode"];
+  fixed_fare: string | null;
+  total_seats: number;
+  available_seats: number;
+  is_student_only: boolean;
+  is_women_only: boolean;
+  pickup_type: string | null;
+  joined_at: string | null;
+  left_at: string | null;
+  host_username: string | null;
+  host_display_name: string | null;
+  host_avatar_url: string | null;
+  created_at: string;
+  total_count: string | null;
+};
+
+function mapHistoryEntry(row: HistoryRow): RideHistoryEntry {
+  return {
+    rideId: row.ride_id,
+    relation: row.relation,
+    userId: row.user_id,
+    origin: row.origin,
+    destination: row.destination,
+    departureTime: row.departure_time,
+    rideStatus: row.ride_status,
+    requestStatus: (row.request_status as RideHistoryEntry["requestStatus"]) ?? null,
+    fareMode: row.fare_mode,
+    fixedFare: toNullableNumber(row.fixed_fare),
+    totalSeats: row.total_seats,
+    availableSeats: row.available_seats,
+    isStudentOnly: row.is_student_only,
+    isWomenOnly: row.is_women_only,
+    pickupType: (row.pickup_type as RideHistoryEntry["pickupType"]) ?? null,
+    joinedAt: row.joined_at,
+    leftAt: row.left_at,
+    hostUsername: row.host_username,
+    hostDisplayName: row.host_display_name,
+    hostAvatarUrl: row.host_avatar_url,
+    createdAt: row.created_at,
+  };
+}
+
 function toRideError(error: unknown): RideError {
   const message = (error as { message?: string })?.message ?? "";
   const code = (error as { code?: string })?.code ?? "";
@@ -267,6 +351,36 @@ function toRideError(error: unknown): RideError {
   if (message.includes("Only ride members")) {
     return new RideError("Only people on the ride can see that.");
   }
+  if (message.includes("Pickup must be a main-road point")) {
+    return new RideError("Pickup must be a main-road point, landmark, university, bus stop, metro station or shopping centre.");
+  }
+  if (message.includes("visibility date must be in the future")) {
+    return new RideError("Ride visibility date must be in the future.");
+  }
+  if (message.includes("visibility must be before the departure")) {
+    return new RideError("Ride visibility must be before the departure time.");
+  }
+  if (message.includes("Smart fare details only apply")) {
+    return new RideError("Smart fare details only apply to smart fares.");
+  }
+  if (message.includes("Smart fare details must be a JSON object")) {
+    return new RideError("Smart fare details must be a JSON object.");
+  }
+  if (message.includes("Only draft rides can be deleted")) {
+    return new RideError("Only draft rides can be deleted — published rides must be cancelled or completed.");
+  }
+  if (message.includes("Passengers can only be removed before the ride starts")) {
+    return new RideError("Passengers can only be removed before the ride starts.");
+  }
+  if (message.includes("This ride is no longer active")) {
+    return new RideError("This ride is no longer active.");
+  }
+  if (message.includes("That passenger is not on this ride")) {
+    return new RideError("That passenger is not on this ride.");
+  }
+  if (message.includes("History relation must be")) {
+    return new RideError("Choose a valid history filter (hosted, joined or requested).");
+  }
   if (message.includes("Only the host can view")) {
     return new RideError("Only the host can view the request queue.");
   }
@@ -286,9 +400,10 @@ function requireConfigured(): void {
 
 /** Client-side validation before creating/editing a ride. */
 export function validateRideInput(input: CreateRideInput): string | null {
-  if (!input.origin.trim()) return "Add the ride's starting point.";
-  if (!input.destination.trim()) return "Add the destination.";
-  if (!input.pickupPoint.trim()) return "Add the pickup point.";
+  if (!input.originLoc?.display_name?.trim()) return "Add the ride's starting point.";
+  if (!input.destinationLoc?.display_name?.trim()) return "Add the destination.";
+  if (!input.pickupPointLoc?.display_name?.trim()) return "Add the pickup point.";
+  if (!input.pickupType) return "Choose where the pickup point is (main road, landmark, etc.).";
   if (!input.departureTime) return "Choose a departure date and time.";
   if (new Date(input.departureTime).getTime() <= Date.now()) {
     return "Departure must be in the future.";
@@ -302,6 +417,15 @@ export function validateRideInput(input: CreateRideInput): string | null {
   if (input.fareMode === "smart" && input.fixedFare != null) {
     return "Smart fares don't need an amount.";
   }
+  if (input.visibleAt && new Date(input.visibleAt).getTime() <= Date.now()) {
+    return "Ride visibility date must be in the future.";
+  }
+  if (
+    input.visibleAt &&
+    new Date(input.visibleAt).getTime() >= new Date(input.departureTime).getTime()
+  ) {
+    return "Ride visibility must be before the departure time.";
+  }
   return null;
 }
 
@@ -311,18 +435,21 @@ export async function createRide(input: CreateRideInput): Promise<Ride> {
   const validationError = validateRideInput(input);
   if (validationError) throw new RideError(validationError);
   const { data, error } = await supabase.rpc("create_ride", {
-    p_origin: input.origin.trim(),
-    p_destination: input.destination.trim(),
-    p_pickup_point: input.pickupPoint.trim(),
+    p_origin_loc: input.originLoc,
+    p_destination_loc: input.destinationLoc,
+    p_pickup_point_loc: input.pickupPointLoc,
     p_departure_time: input.departureTime,
     p_total_seats: input.totalSeats,
     p_fare_mode: input.fareMode,
     p_fixed_fare: input.fareMode === "fixed" ? input.fixedFare ?? null : null,
     p_notes: input.notes ?? null,
-    p_destination_point: input.destinationPoint ?? null,
+    p_destination_point_loc: input.destinationPointLoc ?? null,
     p_is_student_only: input.isStudentOnly ?? false,
     p_is_women_only: input.isWomenOnly ?? false,
+    p_pickup_type: input.pickupType,
+    p_visible_at: input.visibleAt ?? null,
     p_estimated_arrival: input.estimatedArrival ?? null,
+    p_smart_fare_details: input.fareMode === "smart" ? (input.smartFareDetails ?? null) : null,
   });
   if (error) throw toRideError(error);
   return mapSingleRide(data);
@@ -342,6 +469,9 @@ export async function updateRide(rideId: string, changes: UpdateRideChanges): Pr
   if (changes.totalSeats != null && (changes.totalSeats < 1 || changes.totalSeats > 10)) {
     throw new RideError("Choose between 1 and 10 seats.");
   }
+  if (changes.pickupType != null && !PICKUP_TYPES.includes(changes.pickupType)) {
+    throw new RideError("Pickup must be a main-road point, landmark, university, bus stop, metro station or shopping centre.");
+  }
   const { data, error } = await supabase.rpc("update_ride", {
     p_ride_id: rideId,
     p_departure_time: changes.departureTime ?? null,
@@ -350,6 +480,33 @@ export async function updateRide(rideId: string, changes: UpdateRideChanges): Pr
     p_total_seats: changes.totalSeats ?? null,
     p_fare_mode: changes.fareMode ?? null,
     p_fixed_fare: changes.fixedFare ?? null,
+    p_destination: changes.destination ?? null,
+    p_destination_point: changes.destinationPoint ?? null,
+    p_pickup_type: changes.pickupType ?? null,
+    p_visible_at: changes.visibleAt ?? null,
+    p_origin_loc: changes.originLoc ?? null,
+    p_destination_loc: changes.destinationLoc ?? null,
+    p_pickup_point_loc: changes.pickupPointLoc ?? null,
+    p_destination_point_loc: changes.destinationPointLoc ?? null,
+    p_smart_fare_details: changes.smartFareDetails ?? null,
+  });
+  if (error) throw toRideError(error);
+  return mapSingleRide(data);
+}
+
+/** Delete a draft ride (host only; everything else is cancelled instead). */
+export async function deleteDraft(rideId: string): Promise<void> {
+  requireConfigured();
+  const { error } = await supabase.rpc("delete_draft", { p_ride_id: rideId });
+  if (error) throw toRideError(error);
+}
+
+/** Host removes a passenger before the ride starts (frees the seat). */
+export async function removePassenger(rideId: string, passengerId: string): Promise<Ride> {
+  requireConfigured();
+  const { data, error } = await supabase.rpc("remove_passenger", {
+    p_ride_id: rideId,
+    p_passenger_id: passengerId,
   });
   if (error) throw toRideError(error);
   return mapSingleRide(data);
@@ -435,6 +592,7 @@ export async function searchRides(filters: RideSearchFilters = {}): Promise<Ride
     p_sort: filters.sort ?? null,
     p_origin_lat: filters.originLat ?? null,
     p_origin_lng: filters.originLng ?? null,
+    p_verified_host: filters.verifiedHost ?? null,
     p_page: filters.page ?? 1,
     p_page_size: filters.pageSize ?? 20,
   });
@@ -443,6 +601,33 @@ export async function searchRides(filters: RideSearchFilters = {}): Promise<Ride
   const rides = rows.map(mapRide);
   const totalCount = rows.length > 0 ? Number(rows[0].total_count ?? 0) : 0;
   return { rides, totalCount };
+}
+
+/**
+ * The current user's ride history (hosted, joined or requested) with
+ * pagination; optionally filtered by ride status.
+ */
+export async function getRideHistory(
+  relation?: RideHistoryRelation | null,
+  status?: Ride["rideStatus"] | null,
+  page = 1,
+  pageSize = 20,
+): Promise<RideHistoryResult> {
+  requireConfigured();
+  if (relation != null && !HISTORY_RELATIONS.includes(relation)) {
+    throw new RideError("Choose a valid history filter (hosted, joined or requested).");
+  }
+  const { data, error } = await supabase.rpc("get_ride_history", {
+    p_relation: relation ?? null,
+    p_status: status ?? null,
+    p_page: page,
+    p_page_size: pageSize,
+  });
+  if (error) throw toRideError(error);
+  const rows = (data ?? []) as HistoryRow[];
+  const entries = rows.map(mapHistoryEntry);
+  const totalCount = rows.length > 0 ? Number(rows[0].total_count ?? 0) : 0;
+  return { entries, totalCount };
 }
 
 /** Ride detail with the host's public profile. */

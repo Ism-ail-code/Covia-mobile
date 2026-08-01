@@ -1,7 +1,7 @@
 /**
  * Ride models.
  *
- * Mirrors the Phase 5 Supabase schema (migrations 0009–0013). Covia is NOT
+ * Mirrors the Phase 5 Supabase schema (migrations 0009–0016). Covia is NOT
  * ride-hailing: rides coordinate verified travellers sharing a vehicle
  * booked through Uber/inDrive/Yango. Every ride has a lifecycle
  *
@@ -9,6 +9,7 @@
  *       \      \      \     \→ cancelled
  *        \     \→ cancelled
  *         \→ cancelled
+ *   published / full →(departure passed, never started)→ expired
  *
  * All writes go through security-definer RPCs; the client never touches
  * the tables directly.
@@ -20,7 +21,8 @@ export type RideStatus =
   | "full"
   | "in_progress"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
 
 export type FareMode = "fixed" | "smart";
 
@@ -43,7 +45,31 @@ export type RideTimelineEventType =
   | "edited"
   | "started"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "dropped"
+  | "expired";
+
+/**
+ * A structured location (migration 0014). The text columns on rides stay
+ * as searchable display-name copies; this object powers maps, route
+ * matching, nearby discovery, ETA and rerouting in later phases.
+ */
+export type RideLocation = {
+  display_name: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  place_id?: string | null;
+  full_address?: string | null;
+};
+
+/** Pickup-point rules: main-road and public places only (no residential). */
+export type PickupType =
+  | "main_road"
+  | "landmark"
+  | "university"
+  | "bus_stop"
+  | "metro_station"
+  | "shopping_center";
 
 export const RIDE_STATUS_LABELS: Record<RideStatus, string> = {
   draft: "Draft",
@@ -52,11 +78,21 @@ export const RIDE_STATUS_LABELS: Record<RideStatus, string> = {
   in_progress: "In progress",
   completed: "Completed",
   cancelled: "Cancelled",
+  expired: "Expired",
 };
 
 export const FARE_MODE_LABELS: Record<FareMode, string> = {
   fixed: "Fixed fare",
   smart: "Smart fare",
+};
+
+export const PICKUP_TYPE_LABELS: Record<PickupType, string> = {
+  main_road: "Main road",
+  landmark: "Landmark",
+  university: "University",
+  bus_stop: "Bus stop",
+  metro_station: "Metro station",
+  shopping_center: "Shopping centre",
 };
 
 export const RIDE_TIMELINE_LABELS: Record<RideTimelineEventType, string> = {
@@ -73,6 +109,8 @@ export const RIDE_TIMELINE_LABELS: Record<RideTimelineEventType, string> = {
   started: "Ride started",
   completed: "Ride completed",
   cancelled: "Ride cancelled",
+  dropped: "Removed from the ride",
+  expired: "Ride expired",
 };
 
 /**
@@ -87,6 +125,13 @@ export type Ride = {
   destination: string;
   pickupPoint: string;
   destinationPoint: string | null;
+  pickupType: PickupType | null;
+  originLoc: RideLocation | null;
+  destinationLoc: RideLocation | null;
+  pickupPointLoc: RideLocation | null;
+  destinationPointLoc: RideLocation | null;
+  smartFareDetails: Record<string, unknown> | null;
+  visibleAt: string | null;
   originLat: number | null;
   originLng: number | null;
   destinationLat: number | null;
@@ -105,6 +150,7 @@ export type Ride = {
   hostDisplayName: string | null;
   hostAvatarUrl: string | null;
   hostRating: number | null;
+  hostVerified: boolean | null;
   distanceKm: number | null;
   createdAt: string;
   updatedAt: string;
@@ -150,26 +196,38 @@ export type RideTimelineEvent = {
   createdAt: string;
 };
 
-/** Input for create_ride. */
+/** Input for create_ride (structured locations, migration 0015). */
 export type CreateRideInput = {
-  origin: string;
-  destination: string;
-  pickupPoint: string;
+  originLoc: RideLocation;
+  destinationLoc: RideLocation;
+  pickupPointLoc: RideLocation;
+  pickupType: PickupType;
   departureTime: string; // ISO 8601
   totalSeats: number;
   fareMode: FareMode;
   fixedFare?: number | null;
   notes?: string | null;
-  destinationPoint?: string | null;
+  destinationPointLoc?: RideLocation | null;
   isStudentOnly?: boolean;
   isWomenOnly?: boolean;
+  visibleAt?: string | null; // ISO 8601 — ride appears in search from then
   estimatedArrival?: string | null;
+  smartFareDetails?: Record<string, unknown> | null;
 };
 
 /** Optional fields for update_ride; null/undefined means "leave unchanged". */
 export type UpdateRideChanges = {
   departureTime?: string | null;
   pickupPoint?: string | null;
+  destination?: string | null;
+  destinationPoint?: string | null;
+  pickupType?: PickupType | null;
+  visibleAt?: string | null;
+  originLoc?: RideLocation | null;
+  destinationLoc?: RideLocation | null;
+  pickupPointLoc?: RideLocation | null;
+  destinationPointLoc?: RideLocation | null;
+  smartFareDetails?: Record<string, unknown> | null;
   notes?: string | null;
   totalSeats?: number | null;
   fareMode?: FareMode | null;
@@ -188,11 +246,45 @@ export type RideSearchFilters = {
   sort?: RideSort | null;
   originLat?: number | null;
   originLng?: number | null;
+  verifiedHost?: boolean | null;
   page?: number;
   pageSize?: number;
 };
 
 export type RideSearchResult = {
   rides: Ride[];
+  totalCount: number;
+};
+
+/** How the current user relates to a ride in their history. */
+export type RideHistoryRelation = "hosted" | "joined" | "requested";
+
+/** One row of get_ride_history. */
+export type RideHistoryEntry = {
+  rideId: string;
+  relation: RideHistoryRelation;
+  userId: string;
+  origin: string;
+  destination: string;
+  departureTime: string;
+  rideStatus: RideStatus;
+  requestStatus: RideRequestStatus | null;
+  fareMode: FareMode;
+  fixedFare: number | null;
+  totalSeats: number;
+  availableSeats: number;
+  isStudentOnly: boolean;
+  isWomenOnly: boolean;
+  pickupType: PickupType | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  hostUsername: string | null;
+  hostDisplayName: string | null;
+  hostAvatarUrl: string | null;
+  createdAt: string;
+};
+
+export type RideHistoryResult = {
+  entries: RideHistoryEntry[];
   totalCount: number;
 };
