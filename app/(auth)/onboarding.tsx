@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
 import {
   Users,
   ShieldCheck,
@@ -21,7 +22,7 @@ const steps: Array<{
   icon: LucideIcon;
   title: string;
   body: string;
-  permission?: string;
+  permission?: "location";
 }> = [
   {
     icon: Users,
@@ -42,13 +43,12 @@ const steps: Array<{
     icon: MapPin,
     title: "Location access",
     body: "We use your location to show nearby pickup points and share live ride progress with your Covians.",
-    permission: "Allow location",
+    permission: "location",
   },
   {
     icon: Bell,
     title: "Stay in the loop",
     body: "Notifications for join requests, approvals, driver arrival and safety check-ins.",
-    permission: "Enable notifications",
   },
 ];
 
@@ -60,7 +60,16 @@ export default function Onboarding() {
   const Icon = step.icon;
   const last = i === steps.length - 1;
 
-  const next = () => (last ? router.replace("/verification") : setI(i + 1));
+  const next = () => {
+    if (last) {
+      router.replace("/register");
+      return;
+    }
+    if (step.permission === "location") {
+      Location.requestForegroundPermissionsAsync().catch(() => {});
+    }
+    setI(i + 1);
+  };
 
   return (
     <PhoneShell>
@@ -87,7 +96,7 @@ export default function Onboarding() {
               />
             ))}
           </View>
-          <Pressable onPress={() => router.replace("/home")}>
+          <Pressable onPress={() => router.replace("/register")}>
             <AppText size="xs" weight={600} color={colors.mutedForeground}>
               Skip
             </AppText>
@@ -146,13 +155,13 @@ export default function Onboarding() {
             ]}
           >
             <AppText size="base" weight={600} color={colors.primaryForeground}>
-              {step.permission ?? (last ? "Get started" : "Continue")}
+              {step.permission ? "Allow location" : last ? "Get started" : "Continue"}
             </AppText>
             <ArrowRight size={16} color={colors.primaryForeground} />
           </Pressable>
           {step.permission ? (
             <Pressable
-              onPress={next}
+              onPress={() => setI(i + 1)}
               style={({ pressed }) => [{ height: 44, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 }]}
             >
               <AppText size="sm" color={colors.mutedForeground}>

@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { MessageSquare, Mail } from "lucide-react-native";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
-import { Tabs } from "@/components/ui/Tabs";
-import { OTPInput } from "@/components/ui/OTPInput";
 import { Progress } from "@/components/ui/Progress";
 import { Button } from "@/components/ui/Button";
 import { StatusBanner } from "@/components/app/EmptyState";
@@ -24,7 +21,6 @@ function maskEmail(email: string) {
 export default function Verify() {
   const router = useRouter();
   const { user, emailVerified, resendVerification, busy } = useAuth();
-  const [tab, setTab] = useState<"phone" | "email">("email");
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
@@ -55,71 +51,31 @@ export default function Verify() {
       </View>
       <Screen>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 24 }}>
-          <Tabs
-            columns={2}
-            value={tab}
-            onChange={setTab}
-            tabs={[
-              {
-                value: "phone",
-                label: "Phone",
-                icon: (
-                  <MessageSquare
-                    size={16}
-                    color={tab === "phone" ? colors.foreground : colors.mutedForeground}
-                  />
-                ),
-              },
-              {
-                value: "email",
-                label: "Email",
-                icon: (
-                  <Mail size={16} color={tab === "email" ? colors.foreground : colors.mutedForeground} />
-                ),
-              },
-            ]}
-          />
-
-          {tab === "email" ? (
-            <View style={{ gap: 16 }}>
-              <StatusBanner
-                tone="info"
-                title="Confirm your email address"
-                body={`We sent a verification link to ${email ? maskEmail(email) : "your email"}. Tap it to activate your account.`}
-              />
-              {resent ? (
-                <StatusBanner tone="success" title="Email re-sent" body="Check your inbox again — the link expires in 15 minutes." />
-              ) : null}
-              {error ? (
-                <AppText size="xs" color={colors.destructive} style={{ lineHeight: 18 }}>
-                  {error}
-                </AppText>
-              ) : null}
-              <View style={{ alignItems: "center", gap: 16 }}>
-                <AppText size="xs" color={colors.mutedForeground}>
-                  Didn't get it?{" "}
-                  <Pressable onPress={handleResend} disabled={busy}>
-                    <AppText size="xs" weight={600} color={colors.primary}>
-                      {busy ? "Resending…" : "Resend email"}
-                    </AppText>
-                  </Pressable>
-                </AppText>
-              </View>
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", gap: 24, paddingTop: 24 }}>
-              <AppText size="sm" color={colors.mutedForeground} style={{ textAlign: "center" }}>
-                We sent a 6-digit code to your phone number.
+          <View style={{ gap: 16 }}>
+            <StatusBanner
+              tone="info"
+              title="Confirm your email address"
+              body={`We sent a verification link to ${email ? maskEmail(email) : "your email"}. Tap it to activate your account.`}
+            />
+            {resent ? (
+              <StatusBanner tone="success" title="Email re-sent" body="Check your inbox again — the link expires in 15 minutes." />
+            ) : null}
+            {error ? (
+              <AppText size="xs" color={colors.destructive} style={{ lineHeight: 18 }}>
+                {error}
               </AppText>
-              <OTPInput length={6} />
+            ) : null}
+            <View style={{ alignItems: "center", gap: 16 }}>
               <AppText size="xs" color={colors.mutedForeground}>
                 Didn't get it?{" "}
-                <AppText size="xs" weight={600} color={colors.primary}>
-                  Resend code
-                </AppText>
+                <Pressable onPress={handleResend} disabled={busy}>
+                  <AppText size="xs" weight={600} color={colors.primary}>
+                    {busy ? "Resending…" : "Resend email"}
+                  </AppText>
+                </Pressable>
               </AppText>
             </View>
-          )}
+          </View>
         </ScrollView>
       </Screen>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>

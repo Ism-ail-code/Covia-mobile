@@ -68,7 +68,6 @@ export default function Login() {
               label="Email or phone"
               icon={<Mail size={16} color={colors.mutedForeground} />}
               placeholder="you@example.com"
-              defaultValue="amina@example.com"
               autoCapitalize="none"
               keyboardType="email-address"
               value={email}
@@ -78,7 +77,6 @@ export default function Login() {
               label="Password"
               icon={<Lock size={16} color={colors.mutedForeground} />}
               placeholder="••••••••"
-              defaultValue="password"
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}

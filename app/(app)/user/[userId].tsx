@@ -9,11 +9,25 @@ import { TopBar } from "@/components/app/TopBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatBlock, Rating, ReliabilityPill } from "@/components/app/Badges";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
+import { Textarea } from "@/components/ui/Textarea";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/app/EmptyState";
+import { useToast } from "@/components/ui/Toast";
 import { getPublicProfile } from "@/services/profiles";
-import { getUserRatings } from "@/services/trust";
+import { getUserRatings, reportUser } from "@/services/trust";
 import type { PublicProfile } from "@/types/profile";
-import type { UserRating } from "@/types/trust";
+import type { ReportReason, UserRating } from "@/types/trust";
+
+const REPORT_REASONS: Array<{ value: ReportReason; label: string }> = [
+  { value: "no_show", label: "No-show" },
+  { value: "harassment", label: "Harassment" },
+  { value: "fake_identity", label: "Fake identity" },
+  { value: "dangerous_behavior", label: "Dangerous behaviour" },
+  { value: "fraud", label: "Fraud" },
+  { value: "inappropriate_content", label: "Inappropriate content" },
+  { value: "other", label: "Other" },
+];
 
 const joinedLabel = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
@@ -21,10 +35,16 @@ const joinedLabel = (iso: string) =>
 export default function UserProfile() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
+  const toast = useToast();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [ratings, setRatings] = useState<UserRating[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reason, setReason] = useState<ReportReason | null>(null);
+  const [details, setDetails] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -49,6 +69,26 @@ export default function UserProfile() {
       cancelled = true;
     };
   }, [userId]);
+
+  const openReport = () => {
+    setReason(null);
+    setDetails("");
+    setReportOpen(true);
+  };
+
+  const submitReport = async () => {
+    if (!profile || !reason) return;
+    setSubmitting(true);
+    try {
+      await reportUser(profile.id, reason, details.trim() || undefined);
+      setReportOpen(false);
+      toast.success("Report submitted", { description: "Our safety team will review it confidentially." });
+    } catch (e) {
+      toast.error((e as Error).message || "Couldn't submit the report.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -158,7 +198,7 @@ export default function UserProfile() {
             />
           )}
 
-          <Button variant="ghost" block style={{ height: 44, borderRadius: radius.lg }} onPress={() => router.push("/safety")}>
+          <Button variant="ghost" block style={{ height: 44, borderRadius: radius.lg }} onPress={openReport}>
             <Flag size={16} color={colors.destructive} />
             <AppText size="sm" weight={600} color={colors.destructive}>
               Report this user
@@ -166,6 +206,32 @@ export default function UserProfile() {
           </Button>
         </ScrollView>
       </Screen>
+
+      <BottomSheet visible={reportOpen} onClose={() => setReportOpen(false)} title="Report this user">
+        <View style={{ gap: 12 }}>
+          <AppText size="xs" color={colors.mutedForeground} style={{ lineHeight: 18 }}>
+            Reports are confidential. Tell us why you're reporting {profile.displayName ?? "this user"}.
+          </AppText>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {REPORT_REASONS.map((r) => (
+              <Chip key={r.value} active={reason === r.value} onPress={() => setReason(r.value)}>
+                {r.label}
+              </Chip>
+            ))}
+          </View>
+          <Textarea
+            placeholder="Add details (optional)…"
+            style={{ borderRadius: 16, minHeight: 76 }}
+            value={details}
+            onChangeText={setDetails}
+          />
+          <Button block style={{ height: 48, borderRadius: 16 }} disabled={!reason || submitting} onPress={submitReport}>
+            <AppText size="sm" weight={600} color={colors.primaryForeground}>
+              {submitting ? "Submitting…" : "Submit report"}
+            </AppText>
+          </Button>
+        </View>
+      </BottomSheet>
     </PhoneShell>
   );
 }

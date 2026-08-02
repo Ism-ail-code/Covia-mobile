@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Star, Flag } from "lucide-react-native";
+import { Star } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -195,12 +195,6 @@ export default function Ratings() {
                     {r.comment}
                   </AppText>
                 ) : null}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 }}>
-                  <Flag size={12} color={colors.mutedForeground} />
-                  <AppText size="xs" weight={600} color={colors.mutedForeground} style={{ fontSize: 11 }}>
-                    Report
-                  </AppText>
-                </View>
               </View>
             ))
           ) : (

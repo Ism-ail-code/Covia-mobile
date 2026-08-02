@@ -1,19 +1,13 @@
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { useState } from "react";
 import {
   User,
-  Lock,
   Bell,
-  Globe,
-  Phone,
   BadgeCheck,
-  Info,
-  HelpCircle,
-  FileText,
+  Phone,
   LogOut,
   ChevronRight,
-  Shield,
   type LucideIcon,
 } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
@@ -22,38 +16,63 @@ import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
 import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from "@/services/notifications";
+import type { NotificationPreferences } from "@/types/notifications";
 
-const groups: Array<{ title: string; items: Array<{ icon: LucideIcon; label: string; to: string }> }> = [
-  {
-    title: "Account",
-    items: [
-      { icon: User, label: "Edit profile", to: "/create-profile" },
-      { icon: BadgeCheck, label: "Verification status", to: "/verification" },
-      { icon: Phone, label: "Emergency contacts", to: "/safety" },
-    ],
-  },
-  {
-    title: "Preferences",
-    items: [
-      { icon: Globe, label: "Language — English", to: "/settings" },
-      { icon: Shield, label: "Privacy", to: "/settings" },
-      { icon: Lock, label: "Security", to: "/settings" },
-    ],
-  },
-  {
-    title: "Support",
-    items: [
-      { icon: HelpCircle, label: "Help centre", to: "/settings" },
-      { icon: FileText, label: "Terms & privacy", to: "/settings" },
-      { icon: Info, label: "About Covia", to: "/" },
-    ],
-  },
+const accountItems: Array<{ icon: LucideIcon; label: string; to: string }> = [
+  { icon: User, label: "Edit profile", to: "/create-profile" },
+  { icon: BadgeCheck, label: "Verification status", to: "/verification" },
+  { icon: Phone, label: "Emergency contacts", to: "/safety" },
+];
+
+type BooleanPrefKey = {
+  [K in keyof NotificationPreferences]: NotificationPreferences[K] extends boolean ? K : never;
+}[keyof NotificationPreferences];
+
+const prefRows: Array<{ key: BooleanPrefKey; label: string }> = [
+  { key: "rideEnabled", label: "Ride requests & updates" },
+  { key: "chatEnabled", label: "Chat messages" },
+  { key: "safetyEnabled", label: "Safety alerts" },
+  { key: "verificationEnabled", label: "Verification updates" },
+  { key: "emailEnabled", label: "Email notifications" },
+  { key: "marketingEnabled", label: "Product updates" },
 ];
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const toast = useToast();
   const { signOut } = useAuth();
+  const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getNotificationPreferences()
+      .then((p) => {
+        if (mounted) setPrefs(p);
+      })
+      .catch(() => {
+        if (mounted) setPrefs(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const toggle = useCallback(
+    (key: BooleanPrefKey, value: boolean) => {
+      setPrefs((prev) => (prev ? { ...prev, [key]: value } : prev));
+      updateNotificationPreferences({ [key]: value }).catch((e) => {
+        setPrefs((prev) => (prev ? { ...prev, [key]: !value } : prev));
+        toast.error((e as Error).message || "Couldn't save that preference.");
+      });
+    },
+    [toast],
+  );
 
   const handleLogOut = async () => {
     try {
@@ -70,42 +89,55 @@ export default function SettingsScreen() {
       <Screen>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 20 }}>
           <View style={[styles.card]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <Bell size={16} color={colors.primary} />
               <AppText size="sm" weight={600}>
                 Notifications
               </AppText>
             </View>
-            {["Ride requests", "Ride reminders", "Safety alerts", "Product updates"].map((l, i) => (
-              <SettingsSwitchRow key={l} label={l} defaultOn={i < 3} divider={i > 0} />
-            ))}
+            {!prefs ? (
+              <AppText size="xs" color={colors.mutedForeground} style={{ paddingVertical: 12 }}>
+                Loading preferences…
+              </AppText>
+            ) : (
+              prefRows.map(({ key, label }, i) => (
+                <View
+                  key={key}
+                  style={[
+                    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 },
+                    i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+                  ]}
+                >
+                  <AppText size="sm">{label}</AppText>
+                  <Switch value={prefs[key]} onValueChange={(v) => toggle(key, v)} />
+                </View>
+              ))
+            )}
           </View>
 
-          {groups.map((g) => (
-            <View key={g.title}>
-              <AppText size="xs" weight={600} color={colors.mutedForeground} style={{ marginBottom: 8, paddingHorizontal: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                {g.title}
-              </AppText>
-              <View style={{ borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
-                {g.items.map(({ icon: Icon, label, to }, i) => (
-                  <Pressable
-                    key={label}
-                    onPress={() => router.push(to as Href)}
-                    style={({ pressed }) => [
-                      { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, opacity: pressed ? 0.7 : 1 },
-                      i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
-                    ]}
-                  >
-                    <Icon size={18} color={colors.primary} />
-                    <AppText size="sm" weight={500} style={{ flex: 1 }}>
-                      {label}
-                    </AppText>
-                    <ChevronRight size={16} color={colors.mutedForeground} />
-                  </Pressable>
-                ))}
-              </View>
+          <View>
+            <AppText size="xs" weight={600} color={colors.mutedForeground} style={{ marginBottom: 8, paddingHorizontal: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Account
+            </AppText>
+            <View style={{ borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }}>
+              {accountItems.map(({ icon: Icon, label, to }, i) => (
+                <Pressable
+                  key={label}
+                  onPress={() => router.push(to as Href)}
+                  style={({ pressed }) => [
+                    { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, opacity: pressed ? 0.7 : 1 },
+                    i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+                  ]}
+                >
+                  <Icon size={18} color={colors.primary} />
+                  <AppText size="sm" weight={500} style={{ flex: 1 }}>
+                    {label}
+                  </AppText>
+                  <ChevronRight size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ))}
             </View>
-          ))}
+          </View>
 
           <Button variant="ghost" block style={{ height: 48, borderRadius: 16 }} onPress={handleLogOut}>
             <LogOut size={16} color={colors.destructive} />
@@ -132,18 +164,3 @@ const styles = {
     ...shadows.soft,
   },
 };
-
-function SettingsSwitchRow({ label, defaultOn, divider }: { label: string; defaultOn: boolean; divider: boolean }) {
-  const [on, setOn] = useState(defaultOn);
-  return (
-    <View
-      style={[
-        { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 },
-        divider && { borderTopWidth: 1, borderTopColor: colors.border },
-      ]}
-    >
-      <AppText size="sm">{label}</AppText>
-      <Switch value={on} onValueChange={setOn} />
-    </View>
-  );
-}

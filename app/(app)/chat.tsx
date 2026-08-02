@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Mic, Paperclip, Send, Lock } from "lucide-react-native";
+import { Send, Lock } from "lucide-react-native";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -258,9 +258,6 @@ export default function Chat() {
             paddingVertical: 12,
           }}
         >
-          <IconButton accessibilityLabel="Attach" style={{ height: 40, width: 40, borderRadius: 999, backgroundColor: "transparent" }}>
-            <Paperclip size={20} color={colors.mutedForeground} />
-          </IconButton>
           <TextInput
             value={text}
             onChangeText={setText}
@@ -281,9 +278,6 @@ export default function Chat() {
               color: colors.foreground,
             }}
           />
-          <IconButton accessibilityLabel="Voice note" style={{ height: 40, width: 40, borderRadius: 999, backgroundColor: "transparent" }}>
-            <Mic size={20} color={colors.mutedForeground} />
-          </IconButton>
           <IconButton
             accessibilityLabel="Send"
             onPress={send}

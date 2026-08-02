@@ -44,11 +44,29 @@ const naira = (n: number) => `₦${n.toLocaleString()}`;
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
+const timeAgo = (iso: string) => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${Math.max(1, mins)}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+};
+
+const activityTitle = (e: RideHistoryEntry) =>
+  `${e.rideStatus === "completed" ? "Ride completed" : e.rideStatus === "cancelled" || e.rideStatus === "expired" ? "Ride ended" : "Ride scheduled"} to ${e.destination}`;
+
+const activitySubtitle = (e: RideHistoryEntry) =>
+  `${e.relation === "hosted" ? "You hosted" : e.relation === "joined" ? "You joined" : "Requested"} · ${e.rideStatus === "published" ? "departs" : e.rideStatus} ${formatTime(e.departureTime)}`;
+
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const [feed, setFeed] = useState<Ride[]>([]);
+  const [history, setHistory] = useState<RideHistoryEntry[]>([]);
   const [activeRide, setActiveRide] = useState<RideHistoryEntry | null>(null);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -64,13 +82,14 @@ export default function Home() {
     let cancelled = false;
     (async () => {
       try {
-        const [search, history] = await Promise.all([
+        const [search, historyResult] = await Promise.all([
           searchRides({ sort: "departure", pageSize: 6 }),
           getRideHistory(null, null, 1, 20).catch(() => null),
         ]);
         if (cancelled) return;
         setFeed(search.rides);
-        setActiveRide(history?.entries.find((e) => e.rideStatus === "in_progress") ?? null);
+        setHistory(historyResult?.entries ?? []);
+        setActiveRide(historyResult?.entries.find((e) => e.rideStatus === "in_progress") ?? null);
       } catch {
         // Feed sections degrade silently; the explore screen surfaces errors.
       } finally {
@@ -363,7 +382,16 @@ export default function Home() {
         ) : null}
 
         <View style={{ marginTop: 28 }}>
-          <SectionHeader title="Recent activity" />
+          <SectionHeader
+            title="Recent activity"
+            action={
+              <Pressable onPress={() => router.push("/activity")}>
+                <AppText size="xs" weight={600} color={colors.primary}>
+                  See all
+                </AppText>
+              </Pressable>
+            }
+          />
           <View
             style={{
               marginHorizontal: gutter,
@@ -374,14 +402,10 @@ export default function Home() {
               overflow: "hidden",
             }}
           >
-            {[
-              { t: "Ride completed to Ikoyi", s: "Fare split ₦2,100 · 3 Covians", w: "Yesterday" },
-              { t: "You rated Sara Mensah", s: "5 stars · “Very punctual”", w: "Yesterday" },
-              { t: "Verification approved", s: "Government ID confirmed", w: "2 days ago" },
-            ].map((a, i) => (
+            {history.slice(0, 3).map((entry, i) => (
               <Pressable
-                key={a.t}
-                onPress={() => router.push("/activity")}
+                key={entry.rideId}
+                onPress={() => router.push(`/ride/${entry.rideId}`)}
                 style={({ pressed }) => [
                   {
                     flexDirection: "row",
@@ -396,18 +420,23 @@ export default function Home() {
               >
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <AppText size="sm" weight={500} numberOfLines={1}>
-                    {a.t}
+                    {activityTitle(entry)}
                   </AppText>
                   <AppText size="xs" color={colors.mutedForeground} numberOfLines={1}>
-                    {a.s}
+                    {activitySubtitle(entry)}
                   </AppText>
                 </View>
                 <AppText size="xs" color={colors.mutedForeground} style={{ fontSize: 11 }}>
-                  {a.w}
+                  {timeAgo(entry.createdAt)}
                 </AppText>
                 <ChevronRight size={16} color={colors.mutedForeground} />
               </Pressable>
             ))}
+            {!loading && history.length === 0 ? (
+              <AppText size="xs" color={colors.mutedForeground} style={{ padding: 16, textAlign: "center" }}>
+                No rides yet — create or join one to see it here.
+              </AppText>
+            ) : null}
           </View>
         </View>
 

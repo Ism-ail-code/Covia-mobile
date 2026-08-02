@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
-import { Progress } from "@/components/ui/Progress";
-import { Chip } from "@/components/ui/Chip";
 import { Avatar } from "@/components/ui/Avatar";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -19,8 +17,6 @@ import { useAuth } from "@/context/AuthContext";
 import { uploadAvatar, validateAvatar } from "@/services/storage";
 import { validateUsername } from "@/lib/validation";
 import { useToast } from "@/components/ui/Toast";
-
-const prefs = ["Quiet ride", "Music ok", "Women only", "Students", "Early bird", "Luggage ok"];
 
 export default function CreateProfile() {
   const router = useRouter();
@@ -33,18 +29,8 @@ export default function CreateProfile() {
   const [homeCity, setHomeCity] = useState(profile?.homeCity ?? "");
   const [country, setCountry] = useState(profile?.country ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
-  const [selected, setSelected] = useState<Set<string>>(new Set(prefs.slice(0, 2)));
   const [error, setError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-
-  const toggle = (p: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(p)) next.delete(p);
-      else next.add(p);
-      return next;
-    });
-  };
 
   const initials = (displayName || user?.email || "?").slice(0, 2).toUpperCase();
 
@@ -115,10 +101,7 @@ export default function CreateProfile() {
 
   return (
     <PhoneShell>
-      <TopBar title="Create profile" subtitle="Step 3 of 3 — About you" back />
-      <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-        <Progress value={100} />
-      </View>
+      <TopBar title="Edit profile" subtitle="About you" back />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -219,16 +202,6 @@ export default function CreateProfile() {
                 placeholder="A few words about you…"
                 style={{ borderRadius: radius.lg, backgroundColor: colors.background, minHeight: 84 }}
               />
-            </View>
-            <View style={{ gap: 8 }}>
-              <Label>Travel preferences</Label>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {prefs.map((p) => (
-                  <Chip key={p} active={selected.has(p)} onPress={() => toggle(p)}>
-                    {p}
-                  </Chip>
-                ))}
-              </View>
             </View>
 
             {error ? (

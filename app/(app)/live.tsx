@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { MessageCircle, ShieldAlert, Phone, Navigation, RefreshCw } from "lucide-react-native";
+import { MessageCircle, ShieldAlert, Navigation, RefreshCw } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -130,7 +130,7 @@ export default function LiveRide() {
               </AppText>
               {onBoard.length ? (
                 <View style={{ gap: 12 }}>
-                  {onBoard.map((p, i) => (
+                  {onBoard.map((p) => (
                     <View key={p.userId} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                       <Avatar
                         size={36}
@@ -146,7 +146,7 @@ export default function LiveRide() {
                         {p.role === "Host" ? " (Host)" : ""}
                       </AppText>
                       <AppText size="xs" weight={600} color={colors.success}>
-                        {i === onBoard.length - 1 ? "On board" : "On board"}
+                        On board
                       </AppText>
                     </View>
                   ))}
@@ -195,13 +195,6 @@ export default function LiveRide() {
           <AppText size="sm" weight={600} color={colors.secondaryForeground}>
             Chat
           </AppText>
-        </Button>
-        <Button
-          variant="secondary"
-          accessibilityLabel="Call host"
-          style={{ height: 52, width: 52, borderRadius: radius.lg, paddingHorizontal: 0 }}
-        >
-          <Phone size={20} color={colors.secondaryForeground} />
         </Button>
         <Button
           variant="destructive"

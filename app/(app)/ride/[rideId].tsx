@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Users,
@@ -213,7 +213,13 @@ export default function RideDetails() {
               </View>
             </View>
 
-            <View style={[styles.card, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
+            <Pressable
+              onPress={() => host?.userId && host.userId !== me && router.push(`/user/${host.userId}`)}
+              style={({ pressed }) => [
+                styles.card,
+                { flexDirection: "row", alignItems: "center", gap: 12, opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
               <Avatar size={48} src={host?.avatarUrl ?? ride.hostAvatarUrl ?? undefined} fallback={hostInitials} ring="primarySoft" />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -242,7 +248,7 @@ export default function RideDetails() {
                   ) : null}
                 </View>
               </View>
-            </View>
+            </Pressable>
 
             <View style={[styles.card]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -254,7 +260,13 @@ export default function RideDetails() {
               {activeMembers.length ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
                   {activeMembers.map((p) => (
-                    <View key={p.userId} style={{ width: 64, alignItems: "center", gap: 4 }}>
+                    <Pressable
+                      key={p.userId}
+                      onPress={() => p.userId !== me && router.push(`/user/${p.userId}`)}
+                      style={({ pressed }) => [
+                        { width: 64, alignItems: "center", gap: 4, opacity: pressed ? 0.7 : 1 },
+                      ]}
+                    >
                       <Avatar
                         size={44}
                         src={p.avatarUrl ?? undefined}
@@ -267,7 +279,7 @@ export default function RideDetails() {
                       <AppText size="xs" color={colors.mutedForeground} numberOfLines={1} style={{ fontSize: 10 }}>
                         {p.userId === me ? "You" : (p.displayName ?? "Covian").split(" ")[0]}
                       </AppText>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               ) : (

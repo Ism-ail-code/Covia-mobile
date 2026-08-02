@@ -186,7 +186,7 @@ export default function VerificationScreen() {
       setUniversityEmail("");
       void refreshProfile();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong â€” please try again.");
+      setError(err instanceof Error ? err.message : "Something went wrong — please try again.");
     } finally {
       setSubmitting(false);
     }
