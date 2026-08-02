@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ShieldAlert, Phone, Plus, AlertTriangle, Lightbulb, CheckCircle2, Trash2 } from "lucide-react-native";
+import { ShieldAlert, Phone, Plus, AlertTriangle, Lightbulb, CheckCircle2, Trash2, Loader2 } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -15,6 +15,18 @@ import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/context/AuthContext";
 import { validateEmergencyContact } from "@/lib/validation";
 import { safetyTips } from "@/data/mock";
+import { getRideHistory } from "@/services/rides";
+import {
+  getCurrentPosition,
+  getRideMonitoring,
+  reportSafetyIncident,
+  respondSafetyCheck,
+  shareCurrentPosition,
+  subscribeToSafetyEvents,
+  triggerSos,
+} from "@/services/safety";
+import type { RideHistoryEntry } from "@/types/ride";
+import type { RideMonitoring } from "@/types/safety";
 
 export default function Safety() {
   const router = useRouter();
@@ -27,6 +39,47 @@ export default function Safety() {
   const [phone, setPhone] = useState("");
   const [relationship, setRelationship] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [activeRide, setActiveRide] = useState<RideHistoryEntry | null>(null);
+  const [monitoring, setMonitoring] = useState<RideMonitoring | null>(null);
+  const [sosBusy, setSosBusy] = useState(false);
+  const [checkBusy, setCheckBusy] = useState(false);
+  const [incidentNote, setIncidentNote] = useState("");
+  const [reporting, setReporting] = useState(false);
+
+  const loadMonitoring = useCallback(async (rideId: string) => {
+    try {
+      setMonitoring(await getRideMonitoring(rideId));
+    } catch {
+      setMonitoring(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const history = await getRideHistory(null, null, 1, 20);
+        const active = history.entries.find((e) => e.rideStatus === "in_progress") ?? null;
+        if (cancelled) return;
+        setActiveRide(active);
+        if (active) void loadMonitoring(active.rideId);
+      } catch {
+        // No active ride — SOS and monitoring sections degrade gracefully.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadMonitoring]);
+
+  useEffect(() => {
+    if (!activeRide) return;
+    const off = subscribeToSafetyEvents(activeRide.rideId, () => {
+      void loadMonitoring(activeRide.rideId);
+    });
+    return off;
+  }, [activeRide, loadMonitoring]);
 
   const startEditing = () => {
     setName(contact?.name ?? "");
@@ -63,13 +116,91 @@ export default function Safety() {
     }
   };
 
+  const handleSos = async () => {
+    if (!activeRide) {
+      toast.error("No active ride", { description: "SOS is available while your ride is in progress." });
+      return;
+    }
+    setSosBusy(true);
+    try {
+      const position = await getCurrentPosition();
+      await triggerSos(activeRide.rideId, position ?? undefined);
+      if (position) {
+        void shareCurrentPosition(activeRide.rideId).catch(() => {});
+      }
+      toast.success("SOS activated", { description: "Emergency contacts and ride participants were alerted." });
+    } catch (e) {
+      toast.error((e as Error).message || "Couldn't activate SOS.");
+    } finally {
+      setSosBusy(false);
+    }
+  };
+
+  const handleSafe = async () => {
+    if (!activeRide) return;
+    setCheckBusy(true);
+    try {
+      await respondSafetyCheck(activeRide.rideId, true, true);
+      toast.success("Confirmed", { description: "Thanks — marked as safe." });
+      await loadMonitoring(activeRide.rideId);
+    } catch (e) {
+      toast.error((e as Error).message || "Couldn't confirm right now.");
+    } finally {
+      setCheckBusy(false);
+    }
+  };
+
+  const handleNeedHelp = async () => {
+    if (!activeRide) return;
+    setCheckBusy(true);
+    try {
+      await respondSafetyCheck(activeRide.rideId, false, false);
+      toast.error("Help requested", { description: "Emergency contacts were alerted with your location." });
+      await loadMonitoring(activeRide.rideId);
+    } catch (e) {
+      toast.error((e as Error).message || "Couldn't request help right now.");
+    } finally {
+      setCheckBusy(false);
+    }
+  };
+
+  const handleReport = async () => {
+    const note = incidentNote.trim();
+    if (!note) {
+      toast.error("Add a note", { description: "Tell us what happened first." });
+      return;
+    }
+    if (!activeRide) {
+      toast.error("No active ride", { description: "Incident reports need a ride in progress." });
+      return;
+    }
+    setReporting(true);
+    try {
+      await reportSafetyIncident(activeRide.rideId, note);
+      setIncidentNote("");
+      toast.success("Report submitted", { description: "Our safety team will reach out." });
+    } catch (e) {
+      toast.error((e as Error).message || "Couldn't submit the report.");
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const pendingCheck = monitoring?.checkRequiredAt != null;
+
   return (
     <PhoneShell>
-      <TopBar title="Safety centre" subtitle="Support on every trip" back onBack={() => router.back()} />
+      <TopBar
+        title="Safety centre"
+        subtitle={activeRide ? `Monitoring ride to ${activeRide.destination}` : "Support on every trip"}
+        back
+        onBack={() => router.back()}
+      />
       <Screen>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}>
           <Pressable
-            onPress={() => toast.error("SOS activated", { description: "Emergency contacts notified with your live location." })}
+            onPress={handleSos}
+            disabled={sosBusy}
             style={({ pressed }) => [
               {
                 alignItems: "center",
@@ -77,42 +208,58 @@ export default function Safety() {
                 borderRadius: 24,
                 backgroundColor: colors.destructive,
                 paddingVertical: 28,
-                opacity: pressed ? 0.95 : 1,
+                opacity: pressed || sosBusy ? 0.95 : 1,
               },
             ]}
           >
-            <ShieldAlert size={36} color={colors.destructiveForeground} />
+            {sosBusy ? (
+              <Loader2 size={36} color={colors.destructiveForeground} />
+            ) : (
+              <ShieldAlert size={36} color={colors.destructiveForeground} />
+            )}
             <AppText family="display" weight={800} size="lg" color={colors.destructiveForeground}>
               Hold for SOS
             </AppText>
             <AppText size="xs" color={colors.destructiveForeground} style={{ opacity: 0.9 }}>
-              Alerts your contacts and Covia support
+              {activeRide
+                ? `Alerts your contacts and shares your live location on the ride to ${activeRide.destination}`
+                : "Alerts your contacts and Covia support"}
             </AppText>
           </Pressable>
 
-          <StatusBanner
-            tone="warning"
-            icon={<AlertTriangle size={16} color={colors.warning} />}
-            title="Route deviation detected"
-            body="Your ride left the expected route 2 minutes ago. Are you safe?"
-          />
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <Button
-              variant="secondary"
-              style={{ flex: 1, height: 48, borderRadius: 16 }}
-              onPress={() => toast.success("Thanks — marked as safe")}
-            >
-              <CheckCircle2 size={16} color={colors.secondaryForeground} />
-              <AppText size="sm" weight={600} color={colors.secondaryForeground}>
-                I'm safe
-              </AppText>
-            </Button>
-            <Button variant="destructive" style={{ flex: 1, height: 48, borderRadius: 16 }}>
-              <AppText size="sm" weight={600} color={colors.destructiveForeground}>
-                Need help
-              </AppText>
-            </Button>
-          </View>
+          {pendingCheck ? (
+            <>
+              <StatusBanner
+                tone="warning"
+                icon={<AlertTriangle size={16} color={colors.warning} />}
+                title="Are you safe?"
+                body="Covia hasn't seen movement for a while. Confirm you're safe with your device biometrics, or request help."
+              />
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Button
+                  variant="secondary"
+                  style={{ flex: 1, height: 48, borderRadius: 16 }}
+                  disabled={checkBusy}
+                  onPress={handleSafe}
+                >
+                  <CheckCircle2 size={16} color={colors.secondaryForeground} />
+                  <AppText size="sm" weight={600} color={colors.secondaryForeground}>
+                    I'm safe
+                  </AppText>
+                </Button>
+                <Button
+                  variant="destructive"
+                  style={{ flex: 1, height: 48, borderRadius: 16 }}
+                  disabled={checkBusy}
+                  onPress={handleNeedHelp}
+                >
+                  <AppText size="sm" weight={600} color={colors.destructiveForeground}>
+                    Need help
+                  </AppText>
+                </Button>
+              </View>
+            </>
+          ) : null}
 
           <View style={[styles.card]}>
             <AppText size="sm" weight={600} style={{ marginBottom: 12 }}>
@@ -229,14 +376,21 @@ export default function Safety() {
             <AppText size="sm" weight={600} style={{ marginBottom: 8 }}>
               Report an incident
             </AppText>
-            <Textarea placeholder="Tell us what happened…" style={{ borderRadius: 16, minHeight: 76 }} />
+            <Textarea
+              placeholder={activeRide ? "Tell us what happened…" : "Start a ride first — reports are tied to a ride."}
+              style={{ borderRadius: 16, minHeight: 76 }}
+              value={incidentNote}
+              onChangeText={setIncidentNote}
+              editable={!!activeRide}
+            />
             <Button
               block
               style={{ marginTop: 12, height: 48, borderRadius: 16 }}
-              onPress={() => toast.success("Report submitted", { description: "Our safety team will reach out." })}
+              disabled={reporting || !activeRide}
+              onPress={handleReport}
             >
               <AppText size="sm" weight={600} color={colors.primaryForeground}>
-                Submit report
+                {reporting ? "Submitting…" : "Submit report"}
               </AppText>
             </Button>
           </View>
