@@ -36,6 +36,7 @@ import {
 } from "../services/profiles";
 import type { UserProfile } from "../types/profile";
 import { AuthErrorDisplay, toFriendlyAuthError } from "../services/authErrors";
+import { isAdmin as isAdminRpc, currentAdminRole as currentAdminRoleRpc } from "../services/admin";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -51,6 +52,10 @@ type AuthContextValue = {
   profile: UserProfile | null;
   /** True when the account's email has been confirmed. */
   emailVerified: boolean;
+  /** Null until the admin check resolves; false for regular members. */
+  isAdmin: boolean | null;
+  /** The signed-in admin's role name (e.g. "super_admin"); null otherwise. */
+  adminRole: string | null;
   /** True while a profile refresh / session restore is in flight. */
   busy: boolean;
   signUp: (input: {
@@ -85,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
 
@@ -109,6 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loadAdmin = useCallback(async () => {
+    if (!mounted.current) return;
+    const [admin, role] = await Promise.all([isAdminRpc(), currentAdminRoleRpc()]);
+    if (!mounted.current) return;
+    setIsAdmin(admin);
+    setAdminRole(admin ? role : null);
+  }, []);
+
   const applySession = useCallback(
     async (next: Session | null) => {
       if (!mounted.current) return;
@@ -116,11 +131,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus(next ? "authenticated" : "unauthenticated");
       if (next) {
         void loadProfile(next.user.id, next.user.email);
+        void loadAdmin();
       } else {
         setProfile(null);
+        setIsAdmin(null);
+        setAdminRole(null);
       }
     },
-    [loadProfile],
+    [loadProfile, loadAdmin],
   );
 
   // ── Deep link handling (email confirmation / password reset, PKCE) ──
@@ -305,6 +323,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       profile,
       emailVerified,
+      isAdmin,
+      adminRole,
       busy,
       signUp,
       signIn,

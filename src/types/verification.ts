@@ -32,13 +32,15 @@ export const VERIFICATION_TYPES: { value: VerificationType; label: string }[] = 
   { value: "student", label: "Student ID" },
 ];
 
+/** Private storage bucket holding verification document objects. */
+export const VERIFICATION_DOCUMENTS_BUCKET = "verification-documents";
+
 /**
  * A submission as returned by get_my_verification / submit_verification.
  * Document fields hold object paths inside the private
  * `verification-documents` bucket — never public URLs (0006 migration).
  */
-export type VerificationSubmission = {
-  id: string;
+export type VerificationSubmission = {  id: string;
   userId: string;
   verificationType: VerificationType;
   governmentIdKind: GovernmentIdKind | null;

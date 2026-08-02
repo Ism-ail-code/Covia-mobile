@@ -36,7 +36,7 @@ const timeAgo = (iso: string) => {
 
 export default function Profile() {
   const router = useRouter();
-  const { profile, user, emailVerified } = useAuth();
+  const { profile, user, emailVerified, isAdmin } = useAuth();
   const [summary, setSummary] = useState<TrustSummary | null>(null);
   const [reviews, setReviews] = useState<UserRating[]>([]);
 
@@ -167,6 +167,29 @@ export default function Profile() {
                   <ChevronRight size={16} color={colors.mutedForeground} />
                 </Pressable>
               ))}
+              {isAdmin ? (
+                <Pressable
+                  onPress={() => router.push("/admin")}
+                  style={({ pressed }) => [
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 16,
+                      opacity: pressed ? 0.7 : 1,
+                      borderTopWidth: 1,
+                      borderTopColor: colors.border,
+                      backgroundColor: colors.primarySoft,
+                    },
+                  ]}
+                >
+                  <ShieldCheck size={18} color={colors.primary} />
+                  <AppText size="sm" weight={600} color={colors.primary} style={{ flex: 1 }}>
+                    Admin console
+                  </AppText>
+                  <ChevronRight size={16} color={colors.primary} />
+                </Pressable>
+              ) : null}
             </View>
           </View>
 

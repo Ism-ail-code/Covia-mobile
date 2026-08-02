@@ -40,6 +40,7 @@ function RootNavigator() {
       <Stack.Protected guard={canAccessApp}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(app)" />
+        <Stack.Screen name="admin" />
       </Stack.Protected>
       <Stack.Screen name="(auth)" />
     </Stack>

@@ -60,6 +60,24 @@ export async function deleteAvatarObject(publicUrl: string | null): Promise<void
   await supabase.storage.from(AVATAR_BUCKET).remove([path]).catch(() => undefined);
 }
 
+/**
+ * Short-lived signed URL for a private bucket object (e.g. the
+ * `verification-documents` bucket, whose RLS permits owner + admin
+ * reads). Returns null when the path is empty or signing fails.
+ */
+export async function getPrivateSignedUrl(
+  bucket: string,
+  objectPath: string | null,
+  expiresIn = 300,
+): Promise<string | null> {
+  if (!objectPath) return null;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(objectPath, expiresIn);
+  if (error) return null;
+  return data.signedUrl;
+}
+
 function extractObjectPath(publicUrl: string): string | null {
   const marker = `/storage/v1/object/public/${AVATAR_BUCKET}/`;
   const idx = publicUrl.indexOf(marker);
