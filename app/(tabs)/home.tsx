@@ -25,6 +25,11 @@ import { PulseDot } from "@/components/ui/animations";
 import { safetyTips } from "@/data/mock";
 import { useAuth } from "@/context/AuthContext";
 import { getRideHistory, searchRides } from "@/services/rides";
+import {
+  getUnreadCount,
+  subscribeToNotifications,
+  subscribeToNotificationChanges,
+} from "@/services/notifications";
 import type { Ride, RideHistoryEntry } from "@/types/ride";
 
 const quick: Array<{ label: string; icon: LucideIcon; to: "/create" | "/explore" | "/safety" | "/activity" }> = [
@@ -45,6 +50,7 @@ export default function Home() {
   const { profile } = useAuth();
   const [feed, setFeed] = useState<Ride[]>([]);
   const [activeRide, setActiveRide] = useState<RideHistoryEntry | null>(null);
+  const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const name = profile?.displayName?.split(" ")[0] ?? "Covian";
@@ -73,6 +79,31 @@ export default function Home() {
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    getUnreadCount()
+      .then((n) => {
+        if (mounted) setUnread(n);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const offNew = subscribeToNotifications(() => setUnread((n) => n + 1));
+    const offRead = subscribeToNotificationChanges(() => {
+      getUnreadCount()
+        .then((n) => setUnread(n))
+        .catch(() => {});
+    });
+    return () => {
+      offNew();
+      offRead();
     };
   }, []);
 
@@ -129,6 +160,33 @@ export default function Home() {
                 ]}
               >
                 <Bell size={20} color={colors.primaryForeground} />
+                {unread > 0 ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -2,
+                      right: -2,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      backgroundColor: colors.destructive,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 4,
+                      borderWidth: 2,
+                      borderColor: colors.primary,
+                    }}
+                  >
+                    <AppText
+                      size="xs"
+                      weight={700}
+                      color={colors.destructiveForeground}
+                      style={{ fontSize: 10, lineHeight: 14 }}
+                    >
+                      {unread > 99 ? "99+" : unread}
+                    </AppText>
+                  </View>
+                ) : null}
               </Pressable>
             </View>
 

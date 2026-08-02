@@ -131,6 +131,22 @@ export async function getChat(chatId: string): Promise<Chat> {
 }
 
 /**
+ * Resolve the chat id for a ride. Returns null when the ride has no chat
+ * yet (created on the first approved passenger) or the user isn't a
+ * participant. RLS on `ride_chats` scopes the lookup.
+ */
+export async function getChatForRide(rideId: string): Promise<string | null> {
+  requireConfigured();
+  const { data, error } = await supabase
+    .from("ride_chats")
+    .select("id")
+    .eq("ride_id", rideId)
+    .maybeSingle();
+  if (error) throw toChatError(error);
+  return data?.id ?? null;
+}
+
+/**
  * Load a page of messages (newest first). Pass the oldest `sentAt` you
  * already have as `before` to page further back; `null` loads the
  * newest page.

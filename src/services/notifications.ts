@@ -215,3 +215,19 @@ export function subscribeToNotifications(
     supabase.removeChannel(channel);
   };
 }
+
+/** Subscribe to notification read/delete changes (e.g. to refresh a badge). */
+export function subscribeToNotificationChanges(onChange: () => void): () => void {
+  requireConfigured();
+  const channel = supabase
+    .channel("notifications-changes")
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "notifications" },
+      () => onChange(),
+    )
+    .subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
