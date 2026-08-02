@@ -136,9 +136,9 @@ src/
   station/shopping centre); rides left unpublished past departure
   auto-expire (pg_cron + lazily on read); every state change lands in
   the ride timeline.
-- **Screens are not wired yet** — the existing `(tabs)/create.tsx` and
-  `explore.tsx` still show mock-data UIs. Wire them to this service when
-  the ride UI phase starts.
+- **Screens**: `create.tsx` (draft → publish), `explore.tsx` (search/
+  filters/pagination) and `activity.tsx` (history) all call the service;
+  `home.tsx` renders recent history + discovery rows.
 - Ride RPC reference: `../covia-backend/docs/API_DOCUMENTATION.md`.
 
 ## Notifications (Phase 6)
