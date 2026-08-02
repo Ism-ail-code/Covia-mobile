@@ -27,6 +27,7 @@ import type {
   ReportPage,
   UserStatusFilter,
   VerificationQueueRow,
+  AdminTeamRow,
 } from "@/types/admin";
 
 export class AdminError extends Error {
@@ -403,16 +404,10 @@ export async function adminListAuditLog(input: {
   return pageResult((data as AuditPage["items"]) ?? []);
 }
 
-export async function adminListAdminUsers(): Promise<Array<{
-  user_id: string;
-  email: string;
-  display_name: string | null;
-  role_name: string;
-  created_at: string;
-}>> {
+export async function adminListAdminUsers(): Promise<AdminTeamRow[]> {
   const { data, error } = await supabase.rpc("admin_list_admin_users");
   if (error) throw toAdminError(error, "Couldn't load the admin team.");
-  return (data as Array<{ user_id: string; email: string; display_name: string | null; role_name: string; created_at: string }>) ?? [];
+  return (data as AdminTeamRow[]) ?? [];
 }
 
 export async function adminSetAdminRole(userId: string, roleName: string): Promise<void> {

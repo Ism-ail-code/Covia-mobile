@@ -48,6 +48,12 @@ export default function AdminLayout() {
       <Stack.Screen name="reports/[reportId]" />
       <Stack.Screen name="appeals" />
       <Stack.Screen name="appeals/[appealId]" />
+      <Stack.Screen name="rules" />
+      <Stack.Screen name="safety" />
+      <Stack.Screen name="analytics" />
+      <Stack.Screen name="audit" />
+      <Stack.Screen name="monitoring" />
+      <Stack.Screen name="team" />
       <Stack.Screen name="more" />
     </Stack>
   );
