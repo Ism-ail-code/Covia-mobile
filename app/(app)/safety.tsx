@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ShieldAlert, Phone, Plus, AlertTriangle, Lightbulb, CheckCircle2, Trash2, Loader2 } from "lucide-react-native";
+import { ShieldAlert, Phone, Plus, AlertTriangle, Lightbulb, CheckCircle2, Trash2, Loader2, Star } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -14,27 +14,31 @@ import { Label } from "@/components/ui/Label";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/context/AuthContext";
 import { validateEmergencyContact } from "@/lib/validation";
-import { safetyTips } from "@/data/mock";
+import { safetyTips } from "@/data/safetyTips";
 import { getRideHistory } from "@/services/rides";
 import {
+  addEmergencyContact,
+  deleteEmergencyContact,
   getCurrentPosition,
+  getEmergencyContacts,
   getRideMonitoring,
   reportSafetyIncident,
   respondSafetyCheck,
   shareCurrentPosition,
   subscribeToSafetyEvents,
   triggerSos,
+  updateEmergencyContact,
 } from "@/services/safety";
 import type { RideHistoryEntry } from "@/types/ride";
-import type { RideMonitoring } from "@/types/safety";
+import type { EmergencyContact, RideMonitoring } from "@/types/safety";
 
 export default function Safety() {
   const router = useRouter();
   const toast = useToast();
-  const { profile, saveEmergencyContact, removeEmergencyContact, busy } = useAuth();
+  const { busy } = useAuth();
 
-  const contact = profile?.emergencyContact ?? null;
-  const [editing, setEditing] = useState(false);
+  const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+  const [editing, setEditing] = useState<"new" | string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [relationship, setRelationship] = useState("");
@@ -55,6 +59,14 @@ export default function Safety() {
     }
   }, []);
 
+  const loadContacts = useCallback(async () => {
+    try {
+      setContacts(await getEmergencyContacts());
+    } catch {
+      // Contacts section degrades gracefully when offline.
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -68,10 +80,11 @@ export default function Safety() {
         // No active ride — SOS and monitoring sections degrade gracefully.
       }
     })();
+    void loadContacts();
     return () => {
       cancelled = true;
     };
-  }, [loadMonitoring]);
+  }, [loadMonitoring, loadContacts]);
 
   useEffect(() => {
     if (!activeRide) return;
@@ -81,12 +94,12 @@ export default function Safety() {
     return off;
   }, [activeRide, loadMonitoring]);
 
-  const startEditing = () => {
+  const startEditing = (contact?: EmergencyContact) => {
     setName(contact?.name ?? "");
     setPhone(contact?.phone ?? "");
     setRelationship(contact?.relationship ?? "");
     setFormError(null);
-    setEditing(true);
+    setEditing(contact?.id ?? "new");
   };
 
   const handleSave = async () => {
@@ -96,20 +109,29 @@ export default function Safety() {
       return;
     }
     setFormError(null);
+    const input = { name: name.trim(), phone: phone.trim(), relationship: relationship.trim() };
     try {
-      await saveEmergencyContact({ name: name.trim(), phone: phone.trim(), relationship: relationship.trim() });
-      setEditing(false);
-      toast.success("Emergency contact saved");
+      if (editing === "new") {
+        const created = await addEmergencyContact({ ...input, isPrimary: contacts.length === 0 });
+        setContacts((prev) => [...prev, created]);
+        toast.success("Emergency contact added");
+      } else if (editing) {
+        await updateEmergencyContact(editing, input);
+        setContacts((prev) => prev.map((c) => (c.id === editing ? { ...c, ...input } : c)));
+        toast.success("Emergency contact updated");
+      }
+      setEditing(null);
     } catch {
       setFormError("Couldn't save the contact right now. Please try again.");
     }
   };
 
-  const handleRemove = async () => {
+  const handleRemove = async (contactId: string) => {
     setFormError(null);
     try {
-      await removeEmergencyContact();
-      setEditing(false);
+      await deleteEmergencyContact(contactId);
+      setContacts((prev) => prev.filter((c) => c.id !== contactId));
+      setEditing(null);
       toast.success("Emergency contact removed");
     } catch {
       setFormError("Couldn't remove the contact right now. Please try again.");
@@ -263,34 +285,44 @@ export default function Safety() {
 
           <View style={[styles.card]}>
             <AppText size="sm" weight={600} style={{ marginBottom: 12 }}>
-              Emergency contact
+              Emergency contacts
             </AppText>
 
             {!editing ? (
-              contact ? (
+              contacts.length > 0 ? (
                 <>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }}>
-                    <View style={{ height: 36, width: 36, borderRadius: radius.xl, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
-                      <Phone size={16} color={colors.primary} />
+                  {contacts.map((c) => (
+                    <View key={c.id}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }}>
+                        <View style={{ height: 36, width: 36, borderRadius: radius.xl, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+                          <Phone size={16} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <AppText size="sm" weight={500} numberOfLines={1}>
+                              {c.name}
+                            </AppText>
+                            {c.isPrimary ? <Star size={12} color={colors.warning} fill={colors.warning} /> : null}
+                          </View>
+                          <AppText size="xs" color={colors.mutedForeground}>
+                            {c.relationship} · {c.phone}
+                          </AppText>
+                        </View>
+                        <Pressable onPress={() => startEditing(c)} hitSlop={8}>
+                          <AppText size="xs" weight={600} color={colors.primary}>
+                            Edit
+                          </AppText>
+                        </Pressable>
+                        <Pressable onPress={() => void handleRemove(c.id)} hitSlop={8} disabled={busy}>
+                          <Trash2 size={16} color={colors.destructive} />
+                        </Pressable>
+                      </View>
                     </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <AppText size="sm" weight={500} numberOfLines={1}>
-                        {contact.name}
-                      </AppText>
-                      <AppText size="xs" color={colors.mutedForeground}>
-                        {contact.relationship} · {contact.phone}
-                      </AppText>
-                    </View>
-                    <Pressable onPress={() => startEditing()} hitSlop={8}>
-                      <AppText size="xs" weight={600} color={colors.primary}>
-                        Edit
-                      </AppText>
-                    </Pressable>
-                  </View>
-                  <Button variant="ghost" block style={{ height: 40, borderRadius: 16 }} onPress={handleRemove} disabled={busy}>
-                    <Trash2 size={14} color={colors.destructive} />
-                    <AppText size="sm" weight={600} color={colors.destructive}>
-                      Remove contact
+                  ))}
+                  <Button variant="ghost" block style={{ height: 40, borderRadius: 16 }} onPress={() => startEditing()}>
+                    <Plus size={14} color={colors.primary} />
+                    <AppText size="sm" weight={600} color={colors.primary}>
+                      Add another contact
                     </AppText>
                   </Button>
                 </>
@@ -299,7 +331,7 @@ export default function Safety() {
                   <AppText size="xs" color={colors.mutedForeground} style={{ lineHeight: 18 }}>
                     Add someone you trust — SOS alerts and share-trip updates go to them.
                   </AppText>
-                  <Button variant="secondary" block style={{ marginTop: 12, height: 44, borderRadius: 16 }} onPress={startEditing}>
+                  <Button variant="secondary" block style={{ marginTop: 12, height: 44, borderRadius: 16 }} onPress={() => startEditing()}>
                     <Plus size={16} color={colors.secondaryForeground} />
                     <AppText size="sm" weight={600} color={colors.secondaryForeground}>
                       Add contact
@@ -344,10 +376,10 @@ export default function Safety() {
                 ) : null}
                 <Button block style={{ height: 44, borderRadius: 16 }} disabled={busy} onPress={handleSave}>
                   <AppText size="sm" weight={600} color={colors.primaryForeground}>
-                    {busy ? "Saving…" : "Save contact"}
+                    {busy ? "Saving…" : editing === "new" ? "Save contact" : "Update contact"}
                   </AppText>
                 </Button>
-                <Button variant="ghost" block style={{ height: 40, borderRadius: 16 }} onPress={() => setEditing(false)}>
+                <Button variant="ghost" block style={{ height: 40, borderRadius: 16 }} onPress={() => setEditing(null)}>
                   <AppText size="sm" color={colors.mutedForeground}>
                     Cancel
                   </AppText>

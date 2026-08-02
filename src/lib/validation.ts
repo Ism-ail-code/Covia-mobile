@@ -32,10 +32,6 @@ export function validatePassword(password: string): string | null {
 // ── Username rules (must match the DB check in 0002_profile_identity.sql) ──
 export const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
-export function isValidUsername(username: string): boolean {
-  return USERNAME_PATTERN.test(username.trim().toLowerCase());
-}
-
 /** Returns a friendly error message, or null when the username is valid. */
 export function validateUsername(username: string): string | null {
   const value = username.trim().toLowerCase();

@@ -22,7 +22,7 @@ import { RideCard, RideCardSkeleton } from "@/components/app/RideCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { Chip } from "@/components/ui/Chip";
 import { PulseDot } from "@/components/ui/animations";
-import { safetyTips } from "@/data/mock";
+import { safetyTips } from "@/data/safetyTips";
 import { useAuth } from "@/context/AuthContext";
 import { getRideHistory, searchRides } from "@/services/rides";
 import {

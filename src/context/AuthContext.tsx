@@ -28,15 +28,13 @@ import * as Linking from "expo-linking";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "../services/supabase";
 import {
-  clearEmergencyContact,
   ensureProfile,
   fetchProfile,
-  setEmergencyContact,
   updateProfile,
   updateUsername,
   type ProfilePatch,
 } from "../services/profiles";
-import type { EmergencyContact, UserProfile } from "../types/profile";
+import type { UserProfile } from "../types/profile";
 import { AuthErrorDisplay, toFriendlyAuthError } from "../services/authErrors";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -68,8 +66,6 @@ type AuthContextValue = {
   refreshProfile: () => Promise<UserProfile | null>;
   updateProfilePatch: (patch: ProfilePatch) => Promise<UserProfile>;
   changeUsername: (username: string) => Promise<UserProfile>;
-  saveEmergencyContact: (contact: EmergencyContact) => Promise<UserProfile>;
-  removeEmergencyContact: () => Promise<UserProfile>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -302,23 +298,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session],
   );
 
-  const saveEmergencyContact = useCallback(
-    async (contact: EmergencyContact) => {
-      if (!session) throw new AuthErrorDisplay("You need to be logged in.");
-      const updated = await setEmergencyContact(session.user.id, contact);
-      setProfile(updated);
-      return updated;
-    },
-    [session],
-  );
-
-  const removeEmergencyContact = useCallback(async () => {
-    if (!session) throw new AuthErrorDisplay("You need to be logged in.");
-    const updated = await clearEmergencyContact(session.user.id);
-    setProfile(updated);
-    return updated;
-  }, [session]);
-
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -335,8 +314,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshProfile,
       updateProfilePatch,
       changeUsername,
-      saveEmergencyContact,
-      removeEmergencyContact,
     }),
     [
       status,
@@ -352,8 +329,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshProfile,
       updateProfilePatch,
       changeUsername,
-      saveEmergencyContact,
-      removeEmergencyContact,
     ],
   );
 

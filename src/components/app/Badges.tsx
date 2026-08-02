@@ -10,7 +10,7 @@ import {
 } from "lucide-react-native";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
-import type { Verification } from "@/data/mock";
+import type { Verification } from "@/types/verification";
 
 const verificationMap: Record<
   Verification,

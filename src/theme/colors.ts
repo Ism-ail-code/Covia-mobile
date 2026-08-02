@@ -44,6 +44,3 @@ export const colors = {
 
 /** End colour of the 135deg `gradient-brand` (55% primary + 45% accent, oklab mix). */
 export const gradientBrandEnd = "#0092a4";
-
-/** Colour used by the map placeholder grid and route path overlays. */
-export const gridPrimary = "#096acb";

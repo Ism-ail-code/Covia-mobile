@@ -10,6 +10,8 @@
 
 export type VerificationType = "government_id" | "student";
 
+export type Verification = "id" | "student" | "phone" | "email";
+
 export type GovernmentIdKind = "national_id" | "drivers_license" | "passport";
 
 export type VerificationSubmissionStatus =

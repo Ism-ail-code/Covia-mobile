@@ -1,6 +1,5 @@
 import {
   Pressable,
-  View,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -120,35 +119,5 @@ export function IconButton({
     >
       {children}
     </Pressable>
-  );
-}
-
-/** Tinted rounded tile used for icon containers. */
-export function IconTile({
-  size = 40,
-  radius: r = radius.xl,
-  color = colors.primary,
-  bg = colors.primarySoft,
-  children,
-}: {
-  size?: number;
-  radius?: number;
-  color?: string;
-  bg?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View
-      style={{
-        height: size,
-        width: size,
-        borderRadius: r,
-        backgroundColor: bg,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {children}
-    </View>
   );
 }
