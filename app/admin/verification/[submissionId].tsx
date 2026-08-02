@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { BadgeCheck, ExternalLink, FileText, GraduationCap, IdCard, UserX } from "lucide-react-native";
+import { CheckCircle2, ExternalLink, FileText, GraduationCap, IdCard, ShieldAlert, UserX } from "lucide-react-native";
 import { colors, gutter, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
 import { Avatar } from "@/components/ui/Avatar";
-import { EmptyState } from "@/components/app/EmptyState";
+import { EmptyState, StatusBanner } from "@/components/app/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { adminListVerifications } from "@/services/admin";
+import { ActionDialog } from "@/components/admin/ActionDialog";
+import { useAuth } from "@/context/AuthContext";
+import { adminListVerifications, adminReviewVerification } from "@/services/admin";
 import { getPrivateSignedUrl } from "@/services/storage";
 import { VERIFICATION_DOCUMENTS_BUCKET } from "@/types/verification";
+import { can } from "@/types/admin";
 import type { VerificationQueueRow } from "@/types/admin";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -48,13 +51,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 type DocItem = { label: string; path: string | null };
 
+type ReviewAction = "approve" | "reject" | "request_resubmission" | null;
+
 export default function AdminSubmissionDetail() {
   const { submissionId } = useLocalSearchParams<{ submissionId: string }>();
+  const { adminRole } = useAuth();
+  const canReview = can(adminRole, "verification.review");
   const [row, setRow] = useState<VerificationQueueRow | null>(null);
   const [docs, setDocs] = useState<Array<{ label: string; url: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [action, setAction] = useState<ReviewAction>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<string | null>(null);
 
   const load = useCallback(
     async (refreshingNow = false) => {
@@ -97,6 +108,34 @@ export default function AdminSubmissionDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const submitReview = useCallback(
+    async (reason: string) => {
+      if (!row || !action) return;
+      setActionBusy(true);
+      setActionError(null);
+      try {
+        await adminReviewVerification(row.id, action, reason || null);
+        setLastAction(action === "approve" ? "Submission approved." : action === "reject" ? "Submission rejected." : "Resubmission requested.");
+        setAction(null);
+        await load();
+      } catch (e) {
+        setActionError((e as Error).message || "Couldn't review the submission.");
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [row, action, load],
+  );
+
+  const actionConfig =
+    action === "approve"
+      ? { title: "Approve submission", body: "This will mark the member's identity as verified.", confirm: "Approve", tone: "default" as const, requireReason: false }
+      : action === "reject"
+        ? { title: "Reject submission", body: "The member will see the reason and their documents stay attached.", confirm: "Reject", tone: "destructive" as const, requireReason: true }
+        : action === "request_resubmission"
+          ? { title: "Request resubmission", body: "Ask the member to upload new documents. Rejection reason shown.", confirm: "Request resubmission", tone: "secondary" as const, requireReason: true }
+          : null;
 
   const statusTone =
     row?.status === "approved"
@@ -218,26 +257,82 @@ export default function AdminSubmissionDetail() {
                 </Section>
               ) : null}
 
-              <View
-                style={[
-                  {
-                    borderRadius: radius["2xl"],
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.card,
-                    padding: 16,
-                    alignItems: "center",
-                    gap: 8,
-                    ...shadows.soft,
-                  },
-                ]}
-              >
-                <BadgeCheck size={20} color={colors.primary} />
-                <AppText size="sm" weight={700}>Review actions</AppText>
-                <AppText size="xs" color={colors.mutedForeground} style={{ textAlign: "center" }}>
-                  Approve, reject and resubmission tools arrive with the moderation batch.
-                </AppText>
-              </View>
+              {lastAction ? (
+                <StatusBanner tone="success" icon={<CheckCircle2 size={16} color={colors.success} />} title={lastAction} />
+              ) : null}
+
+              {canReview ? (
+                <View
+                  style={[
+                    {
+                      borderRadius: radius["2xl"],
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      padding: 16,
+                      gap: 10,
+                      ...shadows.soft,
+                    },
+                  ]}
+                >
+                  <AppText size="sm" weight={700}>Review decision</AppText>
+                  {row.status === "pending" || row.status === "resubmission_requested" ? (
+                    <View style={{ gap: 8 }}>
+                      <Button variant="default" onPress={() => setAction("approve")} style={{ height: 44, borderRadius: radius.lg }}>
+                        Approve submission
+                      </Button>
+                      <Button variant="destructive" onPress={() => setAction("reject")} style={{ height: 44, borderRadius: radius.lg }}>
+                        Reject submission
+                      </Button>
+                      <Button variant="secondary" onPress={() => setAction("request_resubmission")} style={{ height: 44, borderRadius: radius.lg }}>
+                        Request resubmission
+                      </Button>
+                    </View>
+                  ) : (
+                    <AppText size="xs" color={colors.mutedForeground}>
+                      This submission was already reviewed — no further action is available.
+                    </AppText>
+                  )}
+                </View>
+              ) : (
+                <View
+                  style={[
+                    {
+                      borderRadius: radius["2xl"],
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      padding: 16,
+                      alignItems: "center",
+                      gap: 8,
+                      ...shadows.soft,
+                    },
+                  ]}
+                >
+                  <ShieldAlert size={20} color={colors.mutedForeground} />
+                  <AppText size="sm" weight={700}>Read-only view</AppText>
+                  <AppText size="xs" color={colors.mutedForeground} style={{ textAlign: "center" }}>
+                    Your role can view this submission but not review it.
+                  </AppText>
+                </View>
+              )}
+
+              <ActionDialog
+                visible={action !== null}
+                title={actionConfig?.title ?? ""}
+                body={actionConfig?.body}
+                confirmLabel={actionConfig?.confirm ?? ""}
+                tone={actionConfig?.tone}
+                requireReason={actionConfig?.requireReason}
+                reasonPlaceholder="Reason shown to the member…"
+                busy={actionBusy}
+                error={actionError}
+                onClose={() => {
+                  setAction(null);
+                  setActionError(null);
+                }}
+                onConfirm={(reason) => void submitReview(reason)}
+              />
 
               {error ? (
                 <View>

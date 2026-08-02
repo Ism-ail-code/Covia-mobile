@@ -59,9 +59,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
   support_agent: ["user.view", "ride.view", "verification.view", "report.view", "appeal.view", "config.view"],
 };
 
-export function can(role: AdminRole | null, permission: AdminPermission): boolean {
+export function can(role: string | null, permission: AdminPermission): boolean {
   if (!role) return false;
-  return ROLE_PERMISSIONS[role].includes(permission);
+  return ROLE_PERMISSIONS[role as AdminRole]?.includes(permission) ?? false;
 }
 
 export type UserStatusFilter = "active" | "suspended" | "banned" | null;

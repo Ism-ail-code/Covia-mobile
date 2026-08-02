@@ -44,6 +44,10 @@ export default function AdminLayout() {
       <Stack.Screen name="rides/[rideId]" />
       <Stack.Screen name="verification" />
       <Stack.Screen name="verification/[submissionId]" />
+      <Stack.Screen name="reports" />
+      <Stack.Screen name="reports/[reportId]" />
+      <Stack.Screen name="appeals" />
+      <Stack.Screen name="appeals/[appealId]" />
       <Stack.Screen name="more" />
     </Stack>
   );

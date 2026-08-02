@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Car, ChevronRight, Flag } from "lucide-react-native";
+import { Car, CheckCircle2, ChevronRight, Flag } from "lucide-react-native";
 import { colors, gutter, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -9,7 +9,10 @@ import { TopBar } from "@/components/app/TopBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusBanner, EmptyState } from "@/components/app/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { adminGetRideDetails, adminGetRideTimeline } from "@/services/admin";
+import { ActionDialog } from "@/components/admin/ActionDialog";
+import { useAuth } from "@/context/AuthContext";
+import { adminCancelRide, adminGetRideDetails, adminGetRideTimeline } from "@/services/admin";
+import { can } from "@/types/admin";
 import type { AdminRideDetails, AdminTimelineEvent } from "@/types/admin";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -47,11 +50,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function AdminRideDetail() {
   const { rideId } = useLocalSearchParams<{ rideId: string }>();
   const router = useRouter();
+  const { adminRole } = useAuth();
+  const canCancel = can(adminRole, "ride.cancel");
   const [ride, setRide] = useState<AdminRideDetails | null>(null);
   const [timeline, setTimeline] = useState<AdminTimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<string | null>(null);
 
   const load = useCallback(
     async (refreshingNow = false) => {
@@ -76,6 +85,27 @@ export default function AdminRideDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const submitCancel = useCallback(
+    async (reason: string) => {
+      if (!rideId) return;
+      setCancelBusy(true);
+      setCancelError(null);
+      try {
+        await adminCancelRide(rideId, reason);
+        setLastAction("Ride cancelled — participants and the host have been notified.");
+        setCancelOpen(false);
+        await load();
+      } catch (e) {
+        setCancelError((e as Error).message || "Couldn't cancel the ride.");
+      } finally {
+        setCancelBusy(false);
+      }
+    },
+    [rideId, load],
+  );
+
+  const cancellable = ride && !["cancelled", "completed", "expired"].includes(ride.ride_status);
 
   const naira = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -156,6 +186,34 @@ export default function AdminRideDetail() {
                   ) : null}
                 </View>
               </View>
+
+              {lastAction ? (
+                <StatusBanner tone="success" icon={<CheckCircle2 size={16} color={colors.success} />} title={lastAction} />
+              ) : null}
+
+              {canCancel && cancellable ? (
+                <View
+                  style={[
+                    {
+                      borderRadius: radius["2xl"],
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      padding: 16,
+                      gap: 8,
+                      ...shadows.soft,
+                    },
+                  ]}
+                >
+                  <AppText size="sm" weight={700}>Moderation</AppText>
+                  <AppText size="xs" color={colors.mutedForeground}>
+                    Cancel the ride when it violates community rules. Participants are notified; the host is never penalized for an admin cancel.
+                  </AppText>
+                  <Button variant="destructive" onPress={() => setCancelOpen(true)} style={{ height: 44, borderRadius: radius.lg }}>
+                    Cancel this ride
+                  </Button>
+                </View>
+              ) : null}
 
               <Section title="Host">
                 <Pressable
@@ -263,6 +321,22 @@ export default function AdminRideDetail() {
               ) : null}
 
               {error ? <StatusBanner tone="warning" title="Some data failed to refresh" body={error} /> : null}
+
+              <ActionDialog
+                visible={cancelOpen}
+                title="Cancel this ride"
+                body="All confirmed participants will be notified. This is recorded in the audit log."
+                confirmLabel="Cancel ride"
+                requireReason
+                reasonPlaceholder="Reason for cancellation (shown to participants)…"
+                busy={cancelBusy}
+                error={cancelError}
+                onClose={() => {
+                  setCancelOpen(false);
+                  setCancelError(null);
+                }}
+                onConfirm={(reason) => void submitCancel(reason)}
+              />
             </>
           ) : null}
         </ScrollView>

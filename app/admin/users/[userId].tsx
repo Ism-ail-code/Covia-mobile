@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowRight, ShieldAlert, UserX } from "lucide-react-native";
+import { ArrowRight, CheckCircle2, ShieldAlert, UserX } from "lucide-react-native";
 import { colors, gutter, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
 import { Avatar } from "@/components/ui/Avatar";
+import { Chip } from "@/components/ui/Chip";
 import { StatusBanner, EmptyState } from "@/components/app/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { adminGetCaseHistory, adminGetUserProfile, adminGetUserRideHistory } from "@/services/admin";
+import { ActionDialog } from "@/components/admin/ActionDialog";
+import { useAuth } from "@/context/AuthContext";
+import { adminBanUser, adminGetCaseHistory, adminGetUserProfile, adminGetUserRideHistory, adminReactivateUser, adminSuspendUser } from "@/services/admin";
+import { can } from "@/types/admin";
 import type { AdminUserProfile, CaseHistory } from "@/types/admin";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -51,12 +55,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function AdminUserDetail() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
+  const { adminRole } = useAuth();
+  const canManage = can(adminRole, "user.manage");
   const [profile, setProfile] = useState<AdminUserProfile | null>(null);
   const [caseHistory, setCaseHistory] = useState<CaseHistory | null>(null);
   const [recentRides, setRecentRides] = useState<Array<{ ride_id: string; origin: string; destination: string; ride_status: string; departure_time: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [action, setAction] = useState<"suspend" | "ban" | "reactivate" | null>(null);
+  const [suspendHours, setSuspendHours] = useState(72);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<string | null>(null);
 
   const load = useCallback(
     async (refreshingNow = false) => {
@@ -86,6 +97,46 @@ export default function AdminUserDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const submitAction = useCallback(
+    async (reason: string) => {
+      if (!userId || !action) return;
+      setActionBusy(true);
+      setActionError(null);
+      try {
+        if (action === "suspend") await adminSuspendUser(userId, reason, suspendHours);
+        else if (action === "ban") await adminBanUser(userId, reason);
+        else await adminReactivateUser(userId, reason);
+        setLastAction(
+          action === "suspend"
+            ? "Account suspended."
+            : action === "ban"
+              ? "Account banned."
+              : "Account reactivated.",
+        );
+        setAction(null);
+        await load();
+      } catch (e) {
+        setActionError((e as Error).message || "Couldn't update the account.");
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [userId, action, suspendHours, load],
+  );
+
+  const actionConfig =
+    action === "suspend"
+      ? { title: "Suspend account", body: "The member can't ride or host while suspended.", confirm: "Suspend" }
+      : action === "ban"
+        ? { title: "Ban account", body: "Permanent removal from Covia. This is recorded in the audit log and cannot be undone via the console.", confirm: "Ban" }
+        : action === "reactivate"
+          ? { title: "Reactivate account", body: "Clears active suspensions and restores access.", confirm: "Reactivate", tone: "secondary" as const }
+          : null;
+
+  const restricted =
+    profile?.is_banned || profile?.is_suspended || (profile?.suspension_end_at != null && new Date(profile.suspension_end_at) > new Date());
+  const suspendedUntil = profile?.suspension_end_at ? new Date(profile.suspension_end_at) : null;
 
   const display = profile?.display_name ?? profile?.username ?? "User";
   const initials = display.slice(0, 2).toUpperCase();
@@ -159,6 +210,42 @@ export default function AdminUserDetail() {
                 </View>
               </View>
 
+              {lastAction ? (
+                <StatusBanner tone="success" icon={<CheckCircle2 size={16} color={colors.success} />} title={lastAction} />
+              ) : null}
+
+              {canManage ? (
+                <View
+                  style={[
+                    {
+                      borderRadius: radius["2xl"],
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      padding: 16,
+                      gap: 10,
+                      ...shadows.soft,
+                    },
+                  ]}
+                >
+                  <AppText size="sm" weight={700}>Enforcement</AppText>
+                  {restricted ? (
+                    <Button variant="secondary" onPress={() => setAction("reactivate")} style={{ height: 44, borderRadius: radius.lg }}>
+                      Reactivate account
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="secondary" onPress={() => setAction("suspend")} style={{ height: 44, borderRadius: radius.lg }}>
+                        Suspend account
+                      </Button>
+                      <Button variant="destructive" onPress={() => setAction("ban")} style={{ height: 44, borderRadius: radius.lg }}>
+                        Ban account
+                      </Button>
+                    </>
+                  )}
+                </View>
+              ) : null}
+
               <Section title="Account">
                 <InfoRow label="Username" value={profile.username ? `@${profile.username}` : "—"} />
                 <InfoRow label="Phone" value={profile.phone ?? "—"} />
@@ -167,6 +254,12 @@ export default function AdminUserDetail() {
                 <InfoRow label="Completed rides" value={String(profile.total_completed_rides)} />
                 <InfoRow label="Cancelled rides" value={String(profile.total_cancelled_rides)} />
                 <InfoRow label="Reports received" value={String(profile.reports_received_total)} />
+                {suspendedUntil && suspendedUntil > new Date() ? (
+                  <InfoRow
+                    label="Suspended until"
+                    value={suspendedUntil.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                  />
+                ) : null}
               </Section>
 
               <Section title="Verification">
@@ -225,6 +318,37 @@ export default function AdminUserDetail() {
               ) : null}
 
               {error ? <StatusBanner tone="warning" title="Some data failed to refresh" body={error} /> : null}
+
+              <ActionDialog
+                visible={action !== null}
+                title={actionConfig?.title ?? ""}
+                body={actionConfig?.body}
+                confirmLabel={actionConfig?.confirm ?? ""}
+                tone={action === "reactivate" ? "secondary" : "destructive"}
+                requireReason
+                busy={actionBusy}
+                error={actionError}
+                onClose={() => {
+                  setAction(null);
+                  setActionError(null);
+                }}
+                onConfirm={(reason) => void submitAction(reason)}
+              >
+                {action === "suspend" ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 12 }}>
+                    {[
+                      { label: "24 hours", hours: 24 },
+                      { label: "3 days", hours: 72 },
+                      { label: "7 days", hours: 168 },
+                      { label: "30 days", hours: 720 },
+                    ].map((d) => (
+                      <Chip key={d.hours} active={suspendHours === d.hours} onPress={() => setSuspendHours(d.hours)}>
+                        {d.label}
+                      </Chip>
+                    ))}
+                  </ScrollView>
+                ) : null}
+              </ActionDialog>
             </>
           ) : null}
         </ScrollView>
