@@ -36,12 +36,12 @@ const steps: Array<{
   {
     icon: Wallet,
     title: "Book anywhere, split fairly",
-    body: "Book the ride on Uber, inDrive or Yango. Companion splits the fare between everyone.",
+    body: "Book the ride on Uber, inDrive or Yango. Covia splits the fare between everyone.",
   },
   {
     icon: MapPin,
     title: "Location access",
-    body: "We use your location to show nearby pickup points and share live ride progress with your companions.",
+    body: "We use your location to show nearby pickup points and share live ride progress with your Covians.",
     permission: "Allow location",
   },
   {

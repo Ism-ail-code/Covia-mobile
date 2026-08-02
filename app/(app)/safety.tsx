@@ -86,7 +86,7 @@ export default function Safety() {
               Hold for SOS
             </AppText>
             <AppText size="xs" color={colors.destructiveForeground} style={{ opacity: 0.9 }}>
-              Alerts your contacts and Companion support
+              Alerts your contacts and Covia support
             </AppText>
           </Pressable>
 

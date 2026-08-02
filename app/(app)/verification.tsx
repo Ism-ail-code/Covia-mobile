@@ -205,7 +205,7 @@ export default function VerificationScreen() {
 
   return (
     <PhoneShell>
-      <TopBar title="Verification" subtitle="Build trust with your companions" back onBack={() => router.back()} />
+      <TopBar title="Verification" subtitle="Build trust with your Covians" back onBack={() => router.back()} />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12, gap: 8 }}>
         {VERIFICATION_TYPES.map((t) => (

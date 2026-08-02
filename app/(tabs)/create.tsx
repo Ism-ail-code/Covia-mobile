@@ -17,22 +17,26 @@ import { StatusBanner } from "@/components/app/EmptyState";
 import { RouteLine } from "@/components/app/RouteLine";
 import { Dialog } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
-import { money } from "@/data/mock";
+import { createRide, publishRide, validateRideInput, RideError } from "@/services/rides";
+import { PICKUP_TYPE_LABELS, type FareMode, type PickupType } from "@/types/ride";
 
-type FareType = "Fixed fare" | "Smart split";
+const naira = (n: number) => `₦${n.toLocaleString()}`;
+
+const PICKUP_OPTIONS = Object.entries(PICKUP_TYPE_LABELS) as Array<[PickupType, string]>;
 
 function ToggleRow({
   label,
   desc,
-  defaultOn,
+  value,
+  onValueChange,
   divider,
 }: {
   label: string;
   desc: string;
-  defaultOn?: boolean;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
   divider?: boolean;
 }) {
-  const [on, setOn] = useState(!!defaultOn);
   return (
     <View
       style={[
@@ -48,32 +52,77 @@ function ToggleRow({
           {desc}
         </AppText>
       </View>
-      <Switch value={on} onValueChange={setOn} />
+      <Switch value={value} onValueChange={onValueChange} />
     </View>
   );
 }
 
+const toISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 export default function CreateRide() {
   const router = useRouter();
   const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [pickup, setPickup] = useState("");
+  const [pickupLandmark, setPickupLandmark] = useState("");
+  const [destination, setDestination] = useState("");
+  const [date, setDate] = useState(() => toISODate(new Date(Date.now() + 24 * 3600 * 1000)));
+  const [time, setTime] = useState("08:15");
+  const [pickupType, setPickupType] = useState<PickupType>("main_road");
   const [seats, setSeats] = useState(3);
-  const [fareType, setFareType] = useState<FareType>("Smart split");
-  const [pickup, setPickup] = useState("Maple Court, Lekki Phase 1");
-  const [destination, setDestination] = useState("Victoria Island — Landmark Centre");
+  const [fareType, setFareType] = useState<FareMode>("smart");
+  const [fixedFare, setFixedFare] = useState("");
+  const [womenOnly, setWomenOnly] = useState(false);
+  const [studentOnly, setStudentOnly] = useState(false);
+  const [notes, setNotes] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const publish = () => {
-    toast.success("Ride published", {
-      description: "Verified companions nearby have been notified.",
-    });
-    router.push("/activity");
+  const fixedFareNumber = fixedFare ? Number(fixedFare) : null;
+  const previewFare =
+    fareType === "fixed" && fixedFareNumber != null ? naira(fixedFareNumber) : "Smart split";
+
+  const submit = async () => {
+    if (busy) return;
+    const departureTime = new Date(`${date}T${time}:00`).toISOString();
+    const input = {
+      originLoc: { display_name: pickup.trim() },
+      pickupPointLoc: { display_name: pickup.trim(), full_address: pickupLandmark.trim() || null },
+      destinationLoc: { display_name: destination.trim() },
+      pickupType,
+      departureTime,
+      totalSeats: seats,
+      fareMode: fareType,
+      fixedFare: fareType === "fixed" ? fixedFareNumber : null,
+      notes: notes.trim() || null,
+      isStudentOnly: studentOnly,
+      isWomenOnly: womenOnly,
+    };
+    const validationError = validateRideInput(input);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    setBusy(true);
+    try {
+      const ride = await createRide(input);
+      await publishRide(ride.id);
+      toast.success("Ride published", {
+        description: "Verified Covians nearby have been notified.",
+      });
+      router.replace(`/ride/${ride.id}`);
+    } catch (e) {
+      toast.error(e instanceof RideError ? e.message : "Couldn't publish the ride — please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <PhoneShell>
       <TopBar
         title="Create a ride"
-        subtitle="Companions book the ride together"
+        subtitle="Covians book the ride together"
         back
         onBack={() => router.navigate("/home")}
       />
@@ -86,7 +135,7 @@ export default function CreateRide() {
           <StatusBanner
             tone="info"
             icon={<Info size={16} color={colors.primary} />}
-            title="Companion doesn't provide drivers"
+            title="Covia doesn't provide drivers"
             body="You'll book on Uber, inDrive or Yango — we handle the matching and the split."
           />
 
@@ -97,9 +146,10 @@ export default function CreateRide() {
             onChangeText={setPickup}
           />
           <FormField
-            label="Pickup landmark"
+            label="Pickup landmark (optional)"
             icon={<Flag size={16} color={colors.mutedForeground} />}
-            defaultValue="Beside the blue coffee kiosk"
+            value={pickupLandmark}
+            onChangeText={setPickupLandmark}
           />
           <FormField
             label="Destination"
@@ -108,12 +158,26 @@ export default function CreateRide() {
             onChangeText={setDestination}
           />
 
+          <View style={{ gap: 8 }}>
+            <Label>Pickup point type</Label>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {PICKUP_OPTIONS.map(([value, label]) => (
+                <Chip key={value} active={pickupType === value} onPress={() => setPickupType(value)}>
+                  {label}
+                </Chip>
+              ))}
+            </View>
+          </View>
+
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ flex: 1, gap: 8 }}>
               <Label>Date</Label>
               <Input
                 icon={<Calendar size={16} color={colors.mutedForeground} />}
-                defaultValue="2026-08-03"
+                value={date}
+                onChangeText={setDate}
+                placeholder="YYYY-MM-DD"
+                autoCapitalize="none"
                 containerStyle={{ minHeight: 48 }}
                 style={{ height: 48, borderRadius: radius.lg, paddingLeft: 40 }}
               />
@@ -122,7 +186,10 @@ export default function CreateRide() {
               <Label>Time</Label>
               <Input
                 icon={<Clock size={16} color={colors.mutedForeground} />}
-                defaultValue="08:15"
+                value={time}
+                onChangeText={setTime}
+                placeholder="HH:MM"
+                autoCapitalize="none"
                 containerStyle={{ minHeight: 48 }}
                 style={{ height: 48, borderRadius: radius.lg, paddingLeft: 40 }}
               />
@@ -146,7 +213,7 @@ export default function CreateRide() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Users size={16} color={colors.mutedForeground} />
                 <AppText size="sm" color={colors.mutedForeground}>
-                  {seats} companions
+                  {seats} Covians
                 </AppText>
               </View>
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -167,7 +234,7 @@ export default function CreateRide() {
                   <Minus size={16} color={colors.secondaryForeground} />
                 </Pressable>
                 <Pressable
-                  onPress={() => setSeats((s) => Math.min(5, s + 1))}
+                  onPress={() => setSeats((s) => Math.min(10, s + 1))}
                   style={({ pressed }) => [
                     {
                       height: 36,
@@ -189,17 +256,27 @@ export default function CreateRide() {
           <View style={{ gap: 8 }}>
             <Label>Fare type</Label>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              {(["Fixed fare", "Smart split"] as FareType[]).map((f) => (
+              {(["fixed", "smart"] as FareMode[]).map((f) => (
                 <Chip key={f} active={fareType === f} onPress={() => setFareType(f)}>
-                  {f}
+                  {f === "fixed" ? "Fixed fare" : "Smart split"}
                 </Chip>
               ))}
             </View>
             <AppText size="xs" color={colors.mutedForeground}>
-              {fareType === "Smart split"
-                ? "Cost is divided by distance travelled per companion."
+              {fareType === "smart"
+                ? "Cost is divided by distance travelled per Covian."
                 : "Everyone pays the same agreed amount per seat."}
             </AppText>
+            {fareType === "fixed" ? (
+              <Input
+                value={fixedFare}
+                onChangeText={setFixedFare}
+                placeholder="Amount per seat (₦)"
+                keyboardType="numeric"
+                containerStyle={{ minHeight: 48, marginTop: 4 }}
+                style={{ height: 48, borderRadius: radius.lg }}
+              />
+            ) : null}
           </View>
 
           <View
@@ -212,18 +289,26 @@ export default function CreateRide() {
             }}
           >
             {[
-              { label: "Women only", desc: "Only women can request a seat" },
-              { label: "Students only", desc: "Requires a verified student badge" },
+              { label: "Women only", desc: "Only women can request a seat", value: womenOnly, set: setWomenOnly },
+              { label: "Students only", desc: "Requires a verified student badge", value: studentOnly, set: setStudentOnly },
             ].map((o, i) => (
-              <ToggleRow key={o.label} label={o.label} desc={o.desc} defaultOn={i === 0} divider={i > 0} />
+              <ToggleRow
+                key={o.label}
+                label={o.label}
+                desc={o.desc}
+                value={o.value}
+                onValueChange={o.set}
+                divider={i > 0}
+              />
             ))}
           </View>
 
           <View style={{ gap: 8 }}>
-            <Label>Ride description</Label>
+            <Label>Ride description (optional)</Label>
             <Textarea
-              placeholder="Anything companions should know — luggage space, music, stops…"
-              defaultValue="Direct route, one quick stop at the toll. Booking on Uber at 08:05 sharp."
+              placeholder="Anything Covians should know — luggage space, music, stops…"
+              value={notes}
+              onChangeText={setNotes}
               style={{ borderRadius: radius.lg, backgroundColor: colors.background, minHeight: 84 }}
             />
           </View>
@@ -238,9 +323,9 @@ export default function CreateRide() {
                 Preview
               </AppText>
             </Button>
-            <Button style={{ flex: 1, height: 52, borderRadius: radius.lg }} onPress={publish}>
+            <Button style={{ flex: 1, height: 52, borderRadius: radius.lg }} onPress={submit} disabled={busy}>
               <AppText size="base" weight={600} color={colors.primaryForeground}>
-                Publish
+                {busy ? "Publishing…" : "Publish"}
               </AppText>
             </Button>
           </View>
@@ -250,15 +335,15 @@ export default function CreateRide() {
       <Dialog visible={previewOpen} onClose={() => setPreviewOpen(false)} title="Ride preview">
         <View style={{ gap: 16 }}>
           <RouteLine
-            pickup={pickup}
-            destination={destination}
-            landmark="Beside the blue coffee kiosk"
+            pickup={pickup || "Pickup location"}
+            destination={destination || "Destination"}
+            landmark={pickupLandmark || undefined}
           />
           <View style={{ flexDirection: "row", gap: 8 }}>
             {[
-              ["Departs", "08:15"],
+              ["Departs", time],
               ["Seats", `${seats}`],
-              ["Est. each", money(1450)],
+              ["Est. each", previewFare],
             ].map(([l, v]) => (
               <View key={l} style={{ flex: 1, borderRadius: radius.lg, backgroundColor: colors.secondary, padding: 12, alignItems: "center" }}>
                 <AppText size="sm" family="display" weight={700}>
@@ -275,11 +360,12 @@ export default function CreateRide() {
             style={{ height: 48, borderRadius: radius.lg }}
             onPress={() => {
               setPreviewOpen(false);
-              publish();
+              submit();
             }}
+            disabled={busy}
           >
             <AppText size="sm" weight={600} color={colors.primaryForeground}>
-              Publish ride
+              {busy ? "Publishing…" : "Publish ride"}
             </AppText>
           </Button>
         </View>

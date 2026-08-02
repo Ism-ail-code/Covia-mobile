@@ -27,7 +27,7 @@ export default function Welcome() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <View style={{ height: 6, width: 6, borderRadius: 999, backgroundColor: colors.primary }} />
             <AppText size="xs" weight={600} color={colors.mutedForeground}>
-              Companion
+              Covia
             </AppText>
           </View>
           <Pressable onPress={() => router.push("/onboarding")}>

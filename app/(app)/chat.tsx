@@ -62,7 +62,7 @@ export default function Chat() {
 
   return (
     <PhoneShell>
-      <TopBar title="Maple Court → VI" subtitle="4 companions · departs 08:15" back onBack={() => router.back()} />
+      <TopBar title="Maple Court → VI" subtitle="4 Covians · departs 08:15" back onBack={() => router.back()} />
       <Screen>
         <ScrollView
           style={{ flex: 1, backgroundColor: `${colors.surface}99` }}
@@ -102,7 +102,7 @@ export default function Chat() {
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Message companions…"
+          placeholder="Message Covians…"
           placeholderTextColor={colors.mutedForeground}
           style={{
             flex: 1,

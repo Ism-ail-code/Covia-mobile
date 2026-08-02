@@ -114,7 +114,7 @@ export default function Login() {
             </Button>
             <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "baseline" }}>
               <AppText size="sm" color={colors.mutedForeground}>
-                New to Companion?{" "}
+                New to Covia?{" "}
               </AppText>
               <Pressable onPress={() => router.push("/register")}>
                 <AppText size="sm" weight={600} color={colors.primary}>

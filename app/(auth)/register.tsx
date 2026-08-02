@@ -137,7 +137,7 @@ export default function Register() {
             >
               <Checkbox value={agreed} onValueChange={setAgreed} />
               <AppText size="xs" color={colors.mutedForeground} style={{ flex: 1, lineHeight: 18 }}>
-                I agree to the Companion Terms of Service, Community Safety Rules and Privacy Policy.
+                I agree to the Covia Terms of Service, Community Safety Rules and Privacy Policy.
               </AppText>
             </Pressable>
 

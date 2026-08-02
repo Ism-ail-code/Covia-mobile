@@ -16,7 +16,7 @@ const familyFor = (family: "body" | "display", weight: number) =>
     ? display((Math.max(500, weight) as 500 | 600 | 700 | 800) || 700)
     : sans((Math.min(700, weight) as 400 | 500 | 600 | 700) || 400);
 
-/** App text primitive backed by the Companion design tokens. */
+/** App text primitive backed by the Covia design tokens. */
 export function AppText({
   size: sz = "sm",
   family = "body",

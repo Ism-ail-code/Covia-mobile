@@ -3,7 +3,7 @@ import { colors, phoneWidth, gutter } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { ScreenFade } from "@/components/ui/animations";
 
-/** Centered phone canvas used by every Companion screen (web PhoneShell). */
+/** Centered phone canvas used by every Covia screen (web PhoneShell). */
 export function PhoneShell({
   children,
   style,

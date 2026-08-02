@@ -207,7 +207,7 @@ export type TimelineStep = {
 export const timelineSteps: TimelineStep[] = [
   { label: "Ride created", detail: "Sara published this route", time: "07:02" },
   { label: "Passenger joined", detail: "Fatima requested a seat", time: "07:14" },
-  { label: "Passenger approved", detail: "Host approved 2 companions", time: "07:18" },
+  { label: "Passenger approved", detail: "Host approved 2 Covians", time: "07:18" },
   { label: "Ride full", detail: "All 4 seats matched", time: "07:41" },
   { label: "Driver booked", detail: "Booked on Uber by host", time: "07:52" },
   { label: "Driver arriving", detail: "3 minutes from pickup", time: "08:09" },
@@ -280,7 +280,7 @@ export const notifications: AppNotification[] = [
     id: "n6",
     kind: "completed",
     title: "Ride completed",
-    body: "Your fare split was ₦2,100. Rate your companions.",
+    body: "Your fare split was ₦2,100. Rate your Covians.",
     time: "Yesterday",
     unread: false,
   },
@@ -336,7 +336,7 @@ export const safetyTips = [
   "Always confirm the host's verification badge before joining.",
   "Share your live ride link with an emergency contact.",
   "Meet at well-lit, public pickup landmarks.",
-  "Companion never handles your driver payment — split in-app after the ride.",
+  "Covia never handles your driver payment — split in-app after the ride.",
 ];
 
 export const emergencyContacts = [
@@ -349,7 +349,7 @@ export const reviews = [
     id: "rv1",
     author: people[0],
     rating: 5,
-    text: "Great companion, on time and easy to coordinate with. Would ride again.",
+    text: "Great Covian, on time and easy to coordinate with. Would ride again.",
     time: "1 week ago",
   },
   {

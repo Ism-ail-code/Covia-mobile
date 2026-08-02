@@ -46,7 +46,7 @@ const groups: Array<{ title: string; items: Array<{ icon: LucideIcon; label: str
     items: [
       { icon: HelpCircle, label: "Help centre", to: "/settings" },
       { icon: FileText, label: "Terms & privacy", to: "/settings" },
-      { icon: Info, label: "About Companion", to: "/" },
+      { icon: Info, label: "About Covia", to: "/" },
     ],
   },
 ];
@@ -114,7 +114,7 @@ export default function SettingsScreen() {
             </AppText>
           </Button>
           <AppText size="xs" color={colors.mutedForeground} style={{ fontSize: 11, textAlign: "center", paddingBottom: 16 }}>
-            Companion v1.0.0
+            Covia v1.0.0
           </AppText>
         </ScrollView>
       </Screen>

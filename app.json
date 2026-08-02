@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Companion",
+    "name": "Covia",
     "slug": "covia-mobile",
-    "scheme": "companion",
+    "scheme": "covia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -30,13 +30,13 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Companion to use your location so your ride can be monitored while it is in progress."
+          "locationWhenInUsePermission": "Allow Covia to use your location so your ride can be monitored while it is in progress."
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Companion to use Face ID to confirm that you are safe."
+          "faceIDPermission": "Allow Covia to use Face ID to confirm that you are safe."
         }
       ]
     ]

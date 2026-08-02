@@ -21,7 +21,7 @@ export default function Profile() {
   const router = useRouter();
   const { profile, user, emailVerified } = useAuth();
 
-  const displayName = profile?.displayName ?? user?.user_metadata?.full_name ?? "Companion";
+  const displayName = profile?.displayName ?? user?.user_metadata?.full_name ?? "Covia";
   const initials = displayName.slice(0, 2).toUpperCase();
   const bio = profile?.bio ?? currentUser.bio;
   const homeCity = profile?.homeCity ?? "Lagos";

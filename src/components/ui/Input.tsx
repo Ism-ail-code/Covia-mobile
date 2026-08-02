@@ -15,7 +15,7 @@ type Props = TextInputProps & {
   containerStyle?: StyleProp<ViewStyle>;
 };
 
-/** Companion text field — rounded-2xl by default, mirrors the web Input. */
+/** Covia text field — rounded-2xl by default, mirrors the web Input. */
 export type InputProps = Props;
 
 export function Input({ icon, rightIcon, containerStyle, style, ...rest }: Props) {

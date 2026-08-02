@@ -3,17 +3,28 @@ import { Check, Loader2 } from "lucide-react-native";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PulseDot } from "@/components/ui/animations";
-import type { TimelineStep } from "@/data/mock";
+import { RIDE_TIMELINE_LABELS, type RideTimelineEvent } from "@/types/ride";
 
-export function RideTimeline({ steps, current }: { steps: TimelineStep[]; current: number }) {
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+
+export function RideTimeline({ events, current }: { events: RideTimelineEvent[]; current: number }) {
+  if (!events.length) {
+    return (
+      <AppText size="xs" color={colors.mutedForeground}>
+        No events yet.
+      </AppText>
+    );
+  }
   return (
     <View>
-      {steps.map((step, i) => {
+      {events.map((event, i) => {
         const done = i < current;
         const active = i === current;
         const pending = !done && !active;
+        const label = RIDE_TIMELINE_LABELS[event.eventType] ?? event.eventType;
         return (
-          <View key={step.label} style={{ flexDirection: "row", gap: 12 }}>
+          <View key={event.id} style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ alignItems: "center" }}>
               <View
                 style={{
@@ -45,7 +56,7 @@ export function RideTimeline({ steps, current }: { steps: TimelineStep[]; curren
                   </AppText>
                 )}
               </View>
-              {i < steps.length - 1 ? (
+              {i < events.length - 1 ? (
                 <View
                   style={{
                     width: 2,
@@ -58,27 +69,29 @@ export function RideTimeline({ steps, current }: { steps: TimelineStep[]; curren
                 />
               ) : null}
             </View>
-            <View style={{ flex: 1, minWidth: 0, paddingBottom: i === steps.length - 1 ? 0 : 20 }}>
+            <View style={{ flex: 1, minWidth: 0, paddingBottom: i === events.length - 1 ? 0 : 20 }}>
               <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
                 {active ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <AppText size="sm" weight={600}>
-                      {step.label}
+                      {label}
                     </AppText>
                     <PulseDot size={6} ringDistance={7} />
                   </View>
                 ) : (
                   <AppText size="sm" weight={600} color={pending ? colors.mutedForeground : colors.foreground}>
-                    {step.label}
+                    {label}
                   </AppText>
                 )}
                 <AppText size="xs" color={colors.mutedForeground} style={{ fontSize: 11 }}>
-                  {step.time}
+                  {formatTime(event.createdAt)}
                 </AppText>
               </View>
-              <AppText size="xs" color={colors.mutedForeground}>
-                {step.detail}
-              </AppText>
+              {event.actorDisplayName ? (
+                <AppText size="xs" color={colors.mutedForeground}>
+                  by {event.actorDisplayName}
+                </AppText>
+              ) : null}
             </View>
           </View>
         );

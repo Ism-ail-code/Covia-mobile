@@ -1,5 +1,5 @@
 /**
- * Companion design system — trust, safety, simplicity.
+ * Covia design system — trust, safety, simplicity.
  * Light-first. Premium blue + green accents. Soft surfaces, rounded corners.
  * Ported 1:1 from the web app's Tailwind theme (styles.css).
  */

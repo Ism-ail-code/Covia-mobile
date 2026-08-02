@@ -1,4 +1,4 @@
-# Companion (Covia) — Mobile App
+# Covia — Mobile App
 
 The React Native (Expo SDK 57) client for **Covia**, a social ride-coordination
 app: users post rides, join rides, and communicate while the vehicle is booked
@@ -63,12 +63,12 @@ src/
 ## Auth flow (Phase 2)
 
 - **Register** → creates the Supabase auth user + `profiles` row (DB trigger)
-  → confirmation email → deep link back into the app (`companion://verify`).
+  → confirmation email → deep link back into the app (`covia://verify`).
 - **Login** → session persisted in AsyncStorage, restored on restart, access
   token auto-refreshed; unverified accounts are directed to the verify screen.
 - **Logout** → session cleared; protected routes redirect to the welcome
   screen via `Stack.Protected`.
-- **Forgot password** → reset email (`companion://reset`) → new password.
+- **Forgot password** → reset email (`covia://reset`) → new password.
 - All screens use `useAuth()` — no duplicated auth logic.
 
 ## Profile system (Phase 3)

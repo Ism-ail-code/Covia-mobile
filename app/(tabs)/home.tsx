@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,11 +18,14 @@ import {
 import { colors, gradientBrandEnd, gutter, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, SectionHeader } from "@/components/app/PhoneShell";
-import { RideCard } from "@/components/app/RideCard";
+import { RideCard, RideCardSkeleton } from "@/components/app/RideCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { Chip } from "@/components/ui/Chip";
 import { PulseDot } from "@/components/ui/animations";
-import { currentUser, rides, safetyTips, money } from "@/data/mock";
+import { safetyTips } from "@/data/mock";
+import { useAuth } from "@/context/AuthContext";
+import { getRideHistory, searchRides } from "@/services/rides";
+import type { Ride, RideHistoryEntry } from "@/types/ride";
 
 const quick: Array<{ label: string; icon: LucideIcon; to: "/create" | "/explore" | "/safety" | "/activity" }> = [
   { label: "Create ride", icon: Plus, to: "/create" },
@@ -30,10 +34,50 @@ const quick: Array<{ label: string; icon: LucideIcon; to: "/create" | "/explore"
   { label: "Activity", icon: Clock, to: "/activity" },
 ];
 
+const naira = (n: number) => `₦${n.toLocaleString()}`;
+
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const active = rides.find((r) => r.status === "active")!;
+  const { profile } = useAuth();
+  const [feed, setFeed] = useState<Ride[]>([]);
+  const [activeRide, setActiveRide] = useState<RideHistoryEntry | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const name = profile?.displayName?.split(" ")[0] ?? "Covian";
+  const initials = (profile?.displayName ?? "Covia user")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [search, history] = await Promise.all([
+          searchRides({ sort: "departure", pageSize: 6 }),
+          getRideHistory(null, null, 1, 20).catch(() => null),
+        ]);
+        if (cancelled) return;
+        setFeed(search.rides);
+        setActiveRide(history?.entries.find((e) => e.rideStatus === "in_progress") ?? null);
+      } catch {
+        // Feed sections degrade silently; the explore screen surfaces errors.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const nearby = useMemo(() => feed.slice(0, 3), [feed]);
+  const recommended = useMemo(() => feed.slice(3, 6), [feed]);
 
   return (
     <PhoneShell>
@@ -48,11 +92,11 @@ export default function Home() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Pressable onPress={() => router.push("/profile")}>
                 <Avatar
-                  src={currentUser.photo}
-                  fallback={currentUser.initials}
+                  src={profile?.avatarUrl ?? undefined}
+                  fallback={initials}
                   size={44}
                   ring={{ color: `${colors.primaryForeground}66` }}
-                  alt={currentUser.name}
+                  alt={profile?.displayName ?? "Profile"}
                 />
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -66,7 +110,7 @@ export default function Home() {
                   color={colors.primaryForeground}
                   numberOfLines={1}
                 >
-                  {currentUser.name.split(" ")[0]}
+                  {name}
                 </AppText>
               </View>
               <Pressable
@@ -85,17 +129,6 @@ export default function Home() {
                 ]}
               >
                 <Bell size={20} color={colors.primaryForeground} />
-                <View
-                  style={{
-                    position: "absolute",
-                    right: 8,
-                    top: 8,
-                    height: 8,
-                    width: 8,
-                    borderRadius: 999,
-                    backgroundColor: colors.warning,
-                  }}
-                />
               </Pressable>
             </View>
 
@@ -109,7 +142,7 @@ export default function Home() {
             >
               <MapPin size={14} color={`${colors.primaryForeground}D9`} />
               <AppText size="xs" color={`${colors.primaryForeground}D9`}>
-                Lekki Phase 1, Lagos
+                {profile?.homeCity ?? "Lagos, Nigeria"}
               </AppText>
             </View>
 
@@ -174,48 +207,53 @@ export default function Home() {
           ))}
         </View>
 
-        <View style={{ marginTop: 28 }}>
-          <SectionHeader
-            title="Active ride"
-            action={
-              <Pressable onPress={() => router.push("/live")}>
-                <AppText size="xs" weight={600} color={colors.primary}>
-                  Track live
+        {activeRide ? (
+          <View style={{ marginTop: 28 }}>
+            <SectionHeader
+              title="Active ride"
+              action={
+                <Pressable onPress={() => router.push(`/ride/${activeRide.rideId}`)}>
+                  <AppText size="xs" weight={600} color={colors.primary}>
+                    Open ride
+                  </AppText>
+                </Pressable>
+              }
+            />
+            <View style={{ paddingHorizontal: gutter }}>
+              <Pressable
+                onPress={() => router.push(`/ride/${activeRide.rideId}`)}
+                style={({ pressed }) => [
+                  {
+                    borderRadius: radius["2xl"],
+                    borderWidth: 1,
+                    borderColor: `${colors.success}40`,
+                    backgroundColor: colors.successSoft,
+                    padding: 16,
+                    ...shadows.soft,
+                    opacity: pressed ? 0.95 : 1,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <PulseDot size={8} color={colors.success} ringDistance={12} />
+                  <AppText size="xs" weight={600} color={colors.success}>
+                    In progress · departing {formatTime(activeRide.departureTime)}
+                  </AppText>
+                </View>
+                <AppText size="base" family="display" weight={700} style={{ marginTop: 8 }}>
+                  {activeRide.destination}
+                </AppText>
+                <AppText size="xs" color={colors.mutedForeground} style={{ marginTop: 2 }}>
+                  {activeRide.hostDisplayName ?? "Covia host"} hosting ·{" "}
+                  {activeRide.totalSeats - activeRide.availableSeats + 1} Covians ·{" "}
+                  {activeRide.fareMode === "fixed" && activeRide.fixedFare != null
+                    ? `${naira(activeRide.fixedFare)} each`
+                    : "smart fare"}
                 </AppText>
               </Pressable>
-            }
-          />
-          <View style={{ paddingHorizontal: gutter }}>
-            <Pressable
-              onPress={() => router.push("/live")}
-              style={({ pressed }) => [
-                {
-                  borderRadius: radius["2xl"],
-                  borderWidth: 1,
-                  borderColor: `${colors.success}40`,
-                  backgroundColor: colors.successSoft,
-                  padding: 16,
-                  ...shadows.soft,
-                  opacity: pressed ? 0.95 : 1,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <PulseDot size={8} color={colors.success} ringDistance={12} />
-                <AppText size="xs" weight={600} color={colors.success}>
-                  In progress · arriving 09:24
-                </AppText>
-              </View>
-              <AppText size="base" family="display" weight={700} style={{ marginTop: 8 }}>
-                {active.destination}
-              </AppText>
-              <AppText size="xs" color={colors.mutedForeground} style={{ marginTop: 2 }}>
-                {active.host.name} hosting · {active.passengers.length + 1} companions ·{" "}
-                {money(active.fare)} each
-              </AppText>
-            </Pressable>
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <View style={{ marginTop: 28 }}>
           <SectionHeader
@@ -228,27 +266,43 @@ export default function Home() {
               </Pressable>
             }
           />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: gutter, gap: 12, paddingBottom: 8 }}
-          >
-            {rides.slice(0, 3).map((r) => (
-              <View key={r.id} style={{ width: 300 }}>
-                <RideCard ride={r} />
-              </View>
-            ))}
-          </ScrollView>
+          {loading ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: gutter, gap: 12 }}
+            >
+              {Array.from({ length: 2 }).map((_, i) => (
+                <View key={i} style={{ width: 300 }}>
+                  <RideCardSkeleton />
+                </View>
+              ))}
+            </ScrollView>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: gutter, gap: 12, paddingBottom: 8 }}
+            >
+              {nearby.map((r) => (
+                <View key={r.id} style={{ width: 300 }}>
+                  <RideCard ride={r} />
+                </View>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
-        <View style={{ marginTop: 28 }}>
-          <SectionHeader title="Recommended for you" />
-          <View style={{ paddingHorizontal: gutter, gap: 12 }}>
-            {rides.slice(2, 4).map((r) => (
-              <RideCard key={r.id} ride={r} />
-            ))}
+        {!loading && recommended.length > 0 ? (
+          <View style={{ marginTop: 28 }}>
+            <SectionHeader title="Recommended for you" />
+            <View style={{ paddingHorizontal: gutter, gap: 12 }}>
+              {recommended.map((r) => (
+                <RideCard key={r.id} ride={r} />
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <View style={{ marginTop: 28 }}>
           <SectionHeader title="Recent activity" />
@@ -263,7 +317,7 @@ export default function Home() {
             }}
           >
             {[
-              { t: "Ride completed to Ikoyi", s: "Fare split ₦2,100 · 3 companions", w: "Yesterday" },
+              { t: "Ride completed to Ikoyi", s: "Fare split ₦2,100 · 3 Covians", w: "Yesterday" },
               { t: "You rated Sara Mensah", s: "5 stars · “Very punctual”", w: "Yesterday" },
               { t: "Verification approved", s: "Government ID confirmed", w: "2 days ago" },
             ].map((a, i) => (

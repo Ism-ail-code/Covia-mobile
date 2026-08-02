@@ -48,7 +48,7 @@ export default function Ratings() {
             <Button
               block
               style={{ marginTop: 12, height: 48, borderRadius: 16 }}
-              onPress={() => toast.success("Review posted", { description: "Thanks for keeping Companion trusted." })}
+              onPress={() => toast.success("Review posted", { description: "Thanks for keeping Covia trusted." })}
             >
               <AppText size="sm" weight={600} color={colors.primaryForeground}>
                 Post review
