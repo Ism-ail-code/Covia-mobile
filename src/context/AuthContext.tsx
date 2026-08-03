@@ -31,7 +31,6 @@ import {
   ensureProfile,
   fetchProfile,
   updateProfile,
-  updateUsername,
   type ProfilePatch,
 } from "../services/profiles";
 import type { UserProfile } from "../types/profile";
@@ -58,6 +57,10 @@ type AuthContextValue = {
   adminRole: string | null;
   /** True while a profile refresh / session restore is in flight. */
   busy: boolean;
+  /** True once a reset deep-link code has been exchanged successfully. */
+  resetReady: boolean;
+  /** Error surfaced by a failed reset-code exchange (expired link etc.). */
+  resetError: string | null;
   signUp: (input: {
     email: string;
     password: string;
@@ -67,10 +70,10 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<User>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  resendVerification: () => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  resendVerification: (emailOverride?: string, fromSignup?: boolean) => Promise<void>;
   refreshProfile: () => Promise<UserProfile | null>;
   updateProfilePatch: (patch: ProfilePatch) => Promise<UserProfile>;
-  changeUsername: (username: string) => Promise<UserProfile>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -78,12 +81,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const EMAIL_VERIFY_PATH = "verify";
 const RESET_PATH = "reset";
 
-function isAuthDeepLink(url: string): boolean {
+type AuthDeepLinkKind = "verify" | "reset" | null;
+
+function authDeepLinkKind(url: string): AuthDeepLinkKind {
   const normalized = url.toLowerCase();
-  return (
-    normalized.includes("code=") &&
-    (normalized.includes(EMAIL_VERIFY_PATH) || normalized.includes("callback"))
-  );
+  if (!normalized.includes("code=")) return null;
+  if (normalized.includes(RESET_PATH)) return "reset";
+  if (normalized.includes(EMAIL_VERIFY_PATH) || normalized.includes("callback")) return "verify";
+  return null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -93,6 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resetReady, setResetReady] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const mounted = useRef(true);
 
   const emailVerified = Boolean(
@@ -145,14 +152,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleUrl = useCallback(
     async (url: string | null) => {
       if (!url || !isSupabaseConfigured) return;
-      if (isAuthDeepLink(url)) {
-        setBusy(true);
-        const { error } = await supabase.auth.exchangeCodeForSession(url);
-        if (error) {
-          console.warn("[auth] code exchange failed", error.message);
+      const kind = authDeepLinkKind(url);
+      if (!kind) return;
+      setBusy(true);
+      const { error } = await supabase.auth.exchangeCodeForSession(url);
+      if (error) {
+        console.warn("[auth] code exchange failed", error.message);
+        if (kind === "reset") {
+          setResetError(
+            "This reset link is invalid or has expired. Request a new one and try again.",
+          );
         }
-        setBusy(false);
+      } else if (kind === "reset") {
+        setResetReady(true);
+        setResetError(null);
       }
+      setBusy(false);
     },
     [],
   );
@@ -206,7 +221,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               full_name: input.fullName.trim(),
               ...(input.phone ? { phone: input.phone.trim() } : {}),
             },
-            emailRedirectTo: Linking.createURL(EMAIL_VERIFY_PATH),
+            emailRedirectTo: Linking.createURL(EMAIL_VERIFY_PATH, {
+              queryParams: { from: "signup" },
+            }),
           },
         });
         if (error) throw error;
@@ -274,16 +291,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const resendVerification = useCallback(async () => {
-    if (!session?.user?.email) {
+  const updatePassword = useCallback(async (password: string) => {
+    if (!isSupabaseConfigured) {
+      throw new AuthErrorDisplay(
+        "Authentication is not configured yet. Add your Supabase keys to .env and restart the app.",
+      );
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const resendVerification = useCallback(async (emailOverride?: string, fromSignup?: boolean) => {
+    const email = session?.user?.email ?? emailOverride;
+    if (!email) {
       throw new AuthErrorDisplay("We don't know your email yet — please log in again.");
     }
     setBusy(true);
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
-        email: session.user.email,
-        options: { emailRedirectTo: Linking.createURL(EMAIL_VERIFY_PATH) },
+        email,
+        options: {
+          emailRedirectTo: Linking.createURL(EMAIL_VERIFY_PATH, {
+            ...(fromSignup ? { queryParams: { from: "signup" } } : {}),
+          }),
+        },
       });
       if (error) throw error;
     } finally {
@@ -306,16 +343,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session],
   );
 
-  const changeUsername = useCallback(
-    async (username: string) => {
-      if (!session) throw new AuthErrorDisplay("You need to be logged in.");
-      const updated = await updateUsername(session.user.id, username);
-      setProfile(updated);
-      return updated;
-    },
-    [session],
-  );
-
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -326,14 +353,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       adminRole,
       busy,
+      resetReady,
+      resetError,
       signUp,
       signIn,
       signOut,
       resetPassword,
+      updatePassword,
       resendVerification,
       refreshProfile,
       updateProfilePatch,
-      changeUsername,
     }),
     [
       status,
@@ -341,14 +370,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       emailVerified,
       busy,
+      resetReady,
+      resetError,
       signUp,
       signIn,
       signOut,
       resetPassword,
+      updatePassword,
       resendVerification,
       refreshProfile,
       updateProfilePatch,
-      changeUsername,
     ],
   );
 

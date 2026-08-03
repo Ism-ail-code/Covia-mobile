@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -20,23 +20,29 @@ function maskEmail(email: string) {
 
 export default function Verify() {
   const router = useRouter();
+  const { email: emailParam, from } = useLocalSearchParams<{ email?: string; from?: string }>();
   const { user, emailVerified, resendVerification, busy } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
-  const email = user?.email ?? "";
+  // After a fresh signup there is no session yet (PKCE), so the email is
+  // forwarded from the register screen via route params.
+  const email = user?.email ?? emailParam ?? "";
 
   // Once the confirmation deep link is exchanged, the session becomes
-  // verified and we can move into the app.
+  // verified. New signups continue to step 3 (profile setup); returning
+  // users head straight home.
   useEffect(() => {
-    if (emailVerified) router.replace("/home");
-  }, [emailVerified, router]);
+    if (emailVerified) {
+      router.replace(from === "signup" ? "/create-profile" : "/home");
+    }
+  }, [emailVerified, router, from]);
 
   const handleResend = async () => {
     setError(null);
     setResent(false);
     try {
-      await resendVerification();
+      await resendVerification(email || undefined, from === "signup");
       setResent(true);
     } catch (err) {
       setError(authErrorMessage(err));

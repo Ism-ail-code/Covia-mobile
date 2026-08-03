@@ -44,7 +44,7 @@ export default function Register() {
   const router = useRouter();
   const { signUp, busy } = useAuth();
   const [values, setValues] = useState<Record<string, string>>({});
-  const [agreed, setAgreed] = useState(true);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const setField = (id: string, value: string) =>
@@ -88,11 +88,14 @@ export default function Register() {
         phone,
       });
       if (sessionCreated) {
-        router.replace("/home");
+        // Confirmation is off — jump straight to profile setup (step 3).
+        router.replace({ pathname: "/create-profile", params: { from: "signup" } });
       } else {
         // Email confirmation is enabled — the profile is created via the
         // DB trigger once the account exists; the user verifies by email.
-        router.replace("/verify");
+        // The email is forwarded so the verify screen can re-send the link
+        // even before a session exists (PKCE flow).
+        router.replace({ pathname: "/verify", params: { email, from: "signup" } });
       }
     } catch (err) {
       setError(authErrorMessage(err));
