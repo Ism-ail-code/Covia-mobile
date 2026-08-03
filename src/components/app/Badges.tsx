@@ -2,7 +2,6 @@ import { View, type StyleProp, type ViewStyle } from "react-native";
 import {
   BadgeCheck,
   GraduationCap,
-  Phone,
   Mail,
   Star,
   ShieldCheck,
@@ -18,7 +17,6 @@ const verificationMap: Record<
 > = {
   id: { icon: BadgeCheck, label: "ID verified", tone: "primary" },
   student: { icon: GraduationCap, label: "Student", tone: "accent" },
-  phone: { icon: Phone, label: "Phone", tone: "muted" },
   email: { icon: Mail, label: "Email", tone: "muted" },
 };
 

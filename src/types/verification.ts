@@ -6,11 +6,16 @@
  * with the status lifecycle
  *   pending → approved | rejected | resubmission_requested
  * plus `expired` for stale documents.
+ *
+ * Email confirmation is the only *account* verification method; the
+ * phone number is collected as a contact field and is never verified.
+ * WhatsApp/SMS verification can be added in a future phase on top of
+ * `profiles.phone` without touching these doc types.
  */
 
 export type VerificationType = "government_id" | "student";
 
-export type Verification = "id" | "student" | "phone" | "email";
+export type Verification = "id" | "student" | "email";
 
 export type GovernmentIdKind = "national_id" | "drivers_license" | "passport";
 

@@ -65,7 +65,7 @@ export default function Login() {
             keyboardShouldPersistTaps="handled"
           >
             <FormField
-              label="Email or phone"
+              label="Email"
               icon={<Mail size={16} color={colors.mutedForeground} />}
               placeholder="you@example.com"
               autoCapitalize="none"
