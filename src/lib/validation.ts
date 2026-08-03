@@ -45,11 +45,16 @@ export function validateUsername(username: string): string | null {
 }
 
 // ── Phone numbers (contact field — collected, never verified) ──
-export const PHONE_PATTERN = /^[+()\d\s-]{7,20}$/;
+// Allowed characters: digits, leading +, spaces, dashes, parentheses and dots.
+export const PHONE_PATTERN = /^\+?[()\d\s.-]{7,20}$/;
 
 /** Format check only — Covia never verifies phone numbers. */
 export function isValidPhone(phone: string): boolean {
-  return PHONE_PATTERN.test(phone.trim());
+  const value = phone.trim();
+  if (!PHONE_PATTERN.test(value)) return false;
+  // Must contain at least 7 actual digits — rejects "+++++++" style input.
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
 }
 
 /** Returns a friendly error message, or null when the phone is valid. */

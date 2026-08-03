@@ -219,46 +219,6 @@ export async function updateProfile(
   return mapRow(data as ProfileRow);
 }
 
-// ── Username ─────────────────────────────────────────────────────────
-
-/**
- * Check whether a username is free to claim. Uses the `is_username_available`
- * RPC (format + reserved list + uniqueness) so it is authoritative.
- */
-export async function isUsernameAvailable(username: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc("is_username_available", {
-    p_username: username.trim().toLowerCase(),
-  });
-  if (error) throw error;
-  return data === true;
-}
-
-/**
- * Set (or change) the username. Throws a friendly error on duplicates,
- * reserved names or invalid formats.
- */
-export async function updateUsername(
-  userId: string,
-  username: string,
-): Promise<UserProfile> {
-  try {
-    return await updateProfile(userId, { username: username.trim().toLowerCase() });
-  } catch (err) {
-    const code = (err as { code?: string })?.code;
-    if (code === "23505") {
-      throw new Error("That username is already taken — try another one.");
-    }
-    const message = (err as { message?: string })?.message ?? "";
-    if (message.includes("reserved")) {
-      throw new Error("That username is reserved and cannot be used.");
-    }
-    if (message.includes("violates check constraint")) {
-      throw new Error("Usernames use 3–20 lowercase letters, numbers or underscores.");
-    }
-    throw err;
-  }
-}
-
 // ── Emergency contacts (all-or-nothing) ──────────────────────────────
 
 export async function setEmergencyContact(
