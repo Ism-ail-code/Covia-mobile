@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Progress } from "@/components/ui/Progress";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
-import { isValidEmail, validatePassword } from "@/lib/validation";
+import { isValidEmail, validatePassword, validatePhone } from "@/lib/validation";
 
 const fields: Array<{
   id: string;
@@ -25,10 +25,18 @@ const fields: Array<{
   icon: LucideIcon;
   placeholder: string;
   type: "text" | "email" | "phone" | "password";
+  hint?: string;
 }> = [
   { id: "name", label: "Full name", icon: User, placeholder: "Amina Yusuf", type: "text" },
   { id: "email", label: "Email", icon: Mail, placeholder: "you@example.com", type: "email" },
-  { id: "phone", label: "Phone number", icon: Phone, placeholder: "+234 800 000 0000", type: "phone" },
+  {
+    id: "phone",
+    label: "Phone number",
+    icon: Phone,
+    placeholder: "+234 800 000 0000",
+    type: "phone",
+    hint: "For contact and future features only — it is never verified.",
+  },
   { id: "password", label: "Password", icon: Lock, placeholder: "At least 8 characters", type: "password" },
 ];
 
@@ -56,8 +64,9 @@ export default function Register() {
       setError("Enter a valid email address.");
       return;
     }
-    if (phone && !/^[+()\d\s-]{7,}$/.test(phone)) {
-      setError("That phone number doesn't look right.");
+    const phoneError = validatePhone(phone);
+    if (phoneError) {
+      setError(phoneError);
       return;
     }
     const passwordError = validatePassword(password);
@@ -76,7 +85,7 @@ export default function Register() {
         email,
         password,
         fullName: name,
-        ...(phone ? { phone } : {}),
+        phone,
       });
       if (sessionCreated) {
         router.replace("/home");
@@ -105,20 +114,26 @@ export default function Register() {
             contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}
             keyboardShouldPersistTaps="handled"
           >
-            {fields.map(({ id, label, icon: Icon, placeholder, type }) => (
-              <FormField
-                key={id}
-                label={label}
-                icon={<Icon size={16} color={colors.mutedForeground} />}
-                placeholder={placeholder}
-                secureTextEntry={type === "password"}
-                keyboardType={
-                  type === "email" ? "email-address" : type === "phone" ? "phone-pad" : "default"
-                }
-                autoCapitalize={type === "text" ? "words" : "none"}
-                value={values[id] ?? ""}
-                onChangeText={(v) => setField(id, v)}
-              />
+            {fields.map(({ id, label, icon: Icon, placeholder, type, hint }) => (
+              <View key={id} style={{ gap: 6 }}>
+                <FormField
+                  label={label}
+                  icon={<Icon size={16} color={colors.mutedForeground} />}
+                  placeholder={placeholder}
+                  secureTextEntry={type === "password"}
+                  keyboardType={
+                    type === "email" ? "email-address" : type === "phone" ? "phone-pad" : "default"
+                  }
+                  autoCapitalize={type === "text" ? "words" : "none"}
+                  value={values[id] ?? ""}
+                  onChangeText={(v) => setField(id, v)}
+                />
+                {hint ? (
+                  <AppText size="xs" color={colors.mutedForeground} style={{ lineHeight: 16 }}>
+                    {hint}
+                  </AppText>
+                ) : null}
+              </View>
             ))}
 
             <Pressable

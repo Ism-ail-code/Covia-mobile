@@ -44,9 +44,24 @@ export function validateUsername(username: string): string | null {
   return null;
 }
 
+// ── Phone numbers (contact field — collected, never verified) ──
+export const PHONE_PATTERN = /^[+()\d\s-]{7,20}$/;
+
+/** Format check only — Covia never verifies phone numbers. */
+export function isValidPhone(phone: string): boolean {
+  return PHONE_PATTERN.test(phone.trim());
+}
+
+/** Returns a friendly error message, or null when the phone is valid. */
+export function validatePhone(phone: string): string | null {
+  if (!phone.trim()) return "Enter your phone number.";
+  if (!isValidPhone(phone)) return "Enter a valid phone number (7–20 digits).";
+  return null;
+}
+
 // ── Emergency contacts ──
 export function isValidEmergencyContactPhone(phone: string): boolean {
-  return /^[+()\d\s-]{7,20}$/.test(phone.trim());
+  return isValidPhone(phone);
 }
 
 export function validateEmergencyContact(input: {
