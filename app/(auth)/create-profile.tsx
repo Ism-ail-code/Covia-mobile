@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera } from "lucide-react-native";
 import { colors, gradientBrandEnd, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
@@ -11,21 +11,31 @@ import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { Progress } from "@/components/ui/Progress";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAvatar, validateAvatar } from "@/services/storage";
-import { validateUsername } from "@/lib/validation";
+import { validatePhone, validateUsername } from "@/lib/validation";
 import { useToast } from "@/components/ui/Toast";
+import { Chip } from "@/components/ui/Chip";
+import { GENDERS, type Gender } from "@/types/profile";
 
 export default function CreateProfile() {
   const router = useRouter();
   const toast = useToast();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isSignupStep = from === "signup";
   const { profile, user, updateProfilePatch, busy } = useAuth();
   const [displayName, setDisplayName] = useState(
     profile?.displayName ?? user?.user_metadata?.full_name ?? "",
   );
   const [username, setUsername] = useState(profile?.username ?? "");
+  const [phone, setPhone] = useState(
+    profile?.phone ?? user?.user_metadata?.phone ?? "",
+  );
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth ?? "");
+  const [gender, setGender] = useState<Gender | null>(profile?.gender ?? null);
   const [homeCity, setHomeCity] = useState(profile?.homeCity ?? "");
   const [country, setCountry] = useState(profile?.country ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
@@ -77,11 +87,27 @@ export default function CreateProfile() {
       setError(usernameError);
       return;
     }
+    const phoneError = phone.trim() ? validatePhone(phone) : null;
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
+    if (dateOfBirth.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth.trim())) {
+      setError("Enter your date of birth as yyyy-mm-dd.");
+      return;
+    }
+    if (dateOfBirth.trim() && new Date(dateOfBirth.trim()).toString() === "Invalid Date") {
+      setError("That date of birth doesn't look right.");
+      return;
+    }
     setError(null);
     try {
       await updateProfilePatch({
         displayName: displayName.trim(),
         username: username.trim().toLowerCase() || null,
+        phone: phone.trim() || null,
+        dateOfBirth: dateOfBirth.trim() || null,
+        gender,
         homeCity: homeCity.trim() || null,
         country: country.trim() || null,
         bio: bio.trim() || null,
@@ -101,7 +127,16 @@ export default function CreateProfile() {
 
   return (
     <PhoneShell>
-      <TopBar title="Edit profile" subtitle="About you" back />
+      <TopBar
+        title={isSignupStep ? "Create your profile" : "Edit profile"}
+        subtitle={isSignupStep ? "Step 3 of 3 — About you" : "About you"}
+        back
+      />
+      {isSignupStep ? (
+        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+          <Progress value={100} />
+        </View>
+      ) : null}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -174,6 +209,47 @@ export default function CreateProfile() {
                 3–20 characters: lowercase letters, numbers and underscores.
               </AppText>
             </View>
+            <View style={{ gap: 8 }}>
+              <Label>Phone number</Label>
+              <Input
+                style={{ height: 48, borderRadius: radius.lg, backgroundColor: colors.background }}
+                placeholder="+234 800 000 0000"
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+              <AppText size="xs" color={colors.mutedForeground}>
+                For contact and future features only — it is never verified.
+              </AppText>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Label>Date of birth</Label>
+              <Input
+                style={{ height: 48, borderRadius: radius.lg, backgroundColor: colors.background }}
+                placeholder="yyyy-mm-dd (optional)"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={dateOfBirth}
+                onChangeText={setDateOfBirth}
+              />
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Label>Gender</Label>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {GENDERS.map((option) => (
+                  <Chip
+                    key={option}
+                    active={gender === option}
+                    onPress={() => setGender(gender === option ? null : option)}
+                  >
+                    {option}
+                  </Chip>
+                ))}
+              </View>
+            </View>
+
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1, gap: 8 }}>
                 <Label>Home city</Label>
