@@ -66,6 +66,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const [feed, setFeed] = useState<Ride[]>([]);
+  const [nearby, setNearby] = useState<Ride[]>([]);
   const [history, setHistory] = useState<RideHistoryEntry[]>([]);
   const [activeRide, setActiveRide] = useState<RideHistoryEntry | null>(null);
   const [unread, setUnread] = useState(0);
@@ -78,16 +79,29 @@ export default function Home() {
     .join("")
     .slice(0, 2);
 
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [search, historyResult] = await Promise.all([
-          searchRides({ sort: "departure", pageSize: 6 }),
+        const [search, nearbySearch, historyResult] = await Promise.all([
+          searchRides({ sort: "departure", pageSize: 3 }),
+          profile?.homeCity
+            ? searchRides({ origin: profile.homeCity, sort: "departure", pageSize: 3 }).catch(
+                () => null,
+              )
+            : Promise.resolve(null),
           getRideHistory(null, null, 1, 20).catch(() => null),
         ]);
         if (cancelled) return;
         setFeed(search.rides);
+        setNearby(nearbySearch?.rides?.length ? nearbySearch.rides : search.rides);
         setHistory(historyResult?.entries ?? []);
         setActiveRide(historyResult?.entries.find((e) => e.rideStatus === "in_progress") ?? null);
       } catch {
@@ -99,7 +113,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [profile?.homeCity]);
 
   useEffect(() => {
     let mounted = true;
@@ -126,8 +140,7 @@ export default function Home() {
     };
   }, []);
 
-  const nearby = useMemo(() => feed.slice(0, 3), [feed]);
-  const recommended = useMemo(() => feed.slice(3, 6), [feed]);
+  const recommended = useMemo(() => feed, [feed]);
 
   return (
     <PhoneShell>
@@ -151,7 +164,7 @@ export default function Home() {
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <AppText size="xs" color={`${colors.primaryForeground}CC`}>
-                  Good morning
+                  {greeting}
                 </AppText>
                 <AppText
                   size="lg"
@@ -209,19 +222,21 @@ export default function Home() {
               </Pressable>
             </View>
 
-            <View
-              style={{
-                marginTop: 16,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <MapPin size={14} color={`${colors.primaryForeground}D9`} />
-              <AppText size="xs" color={`${colors.primaryForeground}D9`}>
-                {profile?.homeCity ?? "Lagos, Nigeria"}
-              </AppText>
-            </View>
+            {profile?.homeCity ? (
+              <View
+                style={{
+                  marginTop: 16,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <MapPin size={14} color={`${colors.primaryForeground}D9`} />
+                <AppText size="xs" color={`${colors.primaryForeground}D9`}>
+                  {profile.homeCity}
+                </AppText>
+              </View>
+            ) : null}
 
             <Pressable
               onPress={() => router.push("/explore")}
