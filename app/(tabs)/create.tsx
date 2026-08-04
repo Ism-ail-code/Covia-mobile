@@ -84,27 +84,32 @@ export default function CreateRide() {
 
   const submit = async () => {
     if (busy) return;
-    const departureTime = new Date(`${date}T${time}:00`).toISOString();
-    const input = {
-      originLoc: { display_name: pickup.trim() },
-      pickupPointLoc: { display_name: pickup.trim(), full_address: pickupLandmark.trim() || null },
-      destinationLoc: { display_name: destination.trim() },
-      pickupType,
-      departureTime,
-      totalSeats: seats,
-      fareMode: fareType,
-      fixedFare: fareType === "fixed" ? fixedFareNumber : null,
-      notes: notes.trim() || null,
-      isStudentOnly: studentOnly,
-      isWomenOnly: womenOnly,
-    };
-    const validationError = validateRideInput(input);
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
     setBusy(true);
     try {
+      const departureDate = new Date(`${date}T${time}:00`);
+      if (isNaN(departureDate.getTime())) {
+        toast.error("Enter a valid departure date and time.");
+        return;
+      }
+      const departureTime = departureDate.toISOString();
+      const input = {
+        originLoc: { display_name: pickup.trim() },
+        pickupPointLoc: { display_name: pickup.trim(), full_address: pickupLandmark.trim() || null },
+        destinationLoc: { display_name: destination.trim() },
+        pickupType,
+        departureTime,
+        totalSeats: seats,
+        fareMode: fareType,
+        fixedFare: fareType === "fixed" ? fixedFareNumber : null,
+        notes: notes.trim() || null,
+        isStudentOnly: studentOnly,
+        isWomenOnly: womenOnly,
+      };
+      const validationError = validateRideInput(input);
+      if (validationError) {
+        toast.error(validationError);
+        return;
+      }
       const ride = await createRide(input);
       await publishRide(ride.id);
       toast.success("Ride published", {

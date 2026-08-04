@@ -221,7 +221,8 @@ export default function Safety() {
       <Screen>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}>
           <Pressable
-            onPress={handleSos}
+            onLongPress={handleSos}
+            delayLongPress={800}
             disabled={sosBusy}
             style={({ pressed }) => [
               {
