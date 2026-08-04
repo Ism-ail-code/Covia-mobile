@@ -38,6 +38,7 @@ function dateForLabel(label: string): string | null {
 export default function Explore() {
   const [active, setActive] = useState("All");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [rides, setRides] = useState<Ride[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -52,6 +53,14 @@ export default function Explore() {
   const [maxKm, setMaxKm] = useState(15);
   const requestedRef = useRef(0);
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const sheetDateOptions = ["Today", "Tomorrow", "This week"];
 
   const baseFilters = useMemo((): RideSearchFilters => {
@@ -64,14 +73,14 @@ export default function Explore() {
 
   const filters = useMemo((): RideSearchFilters => {
     const f: RideSearchFilters = { ...baseFilters, sort: baseFilters.sort ?? "departure" };
-    const dest = query.trim() || sheetDest.trim();
+    const dest = debouncedQuery.trim() || sheetDest.trim();
     if (dest) f.destination = dest;
     const date = sheetDate ?? (active === "Today" ? toISODate(new Date()) : null);
     if (date) f.date = date;
     if (sheetPref === "Women only") f.womenOnly = true;
     if (sheetPref === "Students only") f.studentOnly = true;
     return f;
-  }, [baseFilters, query, sheetDest, sheetDate, sheetPref, active]);
+  }, [baseFilters, debouncedQuery, sheetDest, sheetDate, sheetPref, active]);
 
   const clientFiltersActive =
     active === "Under ₦1,500" || maxFare < 5000 || maxKm < 15;

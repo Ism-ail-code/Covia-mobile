@@ -153,14 +153,19 @@ export default function Notifications() {
   }, [toast]);
 
   const markAll = useCallback(async () => {
+    const previousUnread = unread;
+    const previousItems = items;
     setUnread(0);
     setItems((prev) => prev.map((x) => ({ ...x, isRead: true, readAt: x.readAt ?? new Date().toISOString() })));
     try {
       await markAllNotificationsRead();
     } catch (e) {
+      // Rollback on failure
+      setUnread(previousUnread);
+      setItems(previousItems);
       toast.error((e as Error).message || "Couldn't mark notifications as read.");
     }
-  }, [toast]);
+  }, [toast, unread, items]);
 
   return (
     <PhoneShell>

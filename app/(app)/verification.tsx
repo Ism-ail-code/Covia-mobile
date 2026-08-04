@@ -137,7 +137,7 @@ export default function VerificationScreen() {
         const selfie = picks.selfie ? await uploadVerificationDocument(user.id, "selfie", picks.selfie) : null;
         const current = submissions.government_id;
         const isResubmit =
-          current && (current.status === "rejected" || current.status === "resubmission_requested");
+          current && (current.status === "rejected" || current.status === "resubmission_requested" || current.status === "expired");
         const submission = isResubmit
           ? await resubmitVerification(current.id, {
               type: "government_id",
@@ -157,7 +157,7 @@ export default function VerificationScreen() {
       } else {
         const current = submissions.student;
         const isResubmit =
-          current && (current.status === "rejected" || current.status === "resubmission_requested");
+          current && (current.status === "rejected" || current.status === "resubmission_requested" || current.status === "expired");
         let card: string | null = null;
         let email: string | null = null;
         if (studentMethod === "card") {

@@ -55,6 +55,12 @@ export default function Ratings() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Reset stars and comment when rateable target changes
+  useEffect(() => {
+    setStars(0);
+    setComment("");
+  }, [rateable?.rideId, rateable?.target.rateeUserId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
