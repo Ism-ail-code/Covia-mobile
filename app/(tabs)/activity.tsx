@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
 import { CalendarX2, Clock, Users } from "lucide-react-native";
 import { colors, gutter, radius, shadows } from "@/theme";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Stagger } from "@/components/ui/animations";
 import { getRideHistory } from "@/services/rides";
 import { RIDE_STATUS_LABELS, type RideHistoryEntry, type RideStatus } from "@/types/ride";
+import { naira } from "@/lib/format";
 
 const tabs: Array<{ value: string; label: string }> = [
   { value: "upcoming", label: "Upcoming" },
@@ -27,8 +28,6 @@ const GROUP: Record<string, RideStatus[]> = {
   cancelled: ["cancelled", "expired"],
 };
 
-const naira = (n: number) => `₦${n.toLocaleString()}`;
-
 function formatWhen(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -38,7 +37,7 @@ function formatWhen(iso: string): string {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-function HistoryCard({ entry }: { entry: RideHistoryEntry }) {
+const HistoryCard = React.memo(function HistoryCard({ entry }: { entry: RideHistoryEntry }) {
   const router = useRouter();
   return (
     <Pressable
@@ -96,7 +95,7 @@ function HistoryCard({ entry }: { entry: RideHistoryEntry }) {
       </View>
     </Pressable>
   );
-}
+});
 
 export default function Activity() {
   const router = useRouter();
@@ -105,24 +104,33 @@ export default function Activity() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const load = useCallback(async (refreshingNow = false) => {
     if (refreshingNow) setRefreshing(true);
     else setLoading(true);
     try {
       const { entries: rows } = await getRideHistory(null, null, 1, 50);
+      if (!mountedRef.current) return;
       setEntries(rows);
       setError(null);
     } catch (e) {
+      if (!mountedRef.current) return;
       setError((e as Error).message || "Couldn't load your rides.");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   const grouped = GROUP[tab];
@@ -132,43 +140,49 @@ export default function Activity() {
     <PhoneShell>
       <Screen>
         <TopBar title="Activity" subtitle="Your rides, hosted and joined" />
-        <ScrollView
+        <FlatList
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: gutter, paddingVertical: 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />}
-        >
-          <Tabs
-            columns={4}
-            value={tab}
-            onChange={setTab}
-            tabs={tabs}
-          />
-
-          <View style={{ marginTop: 16, gap: 12 }}>
-            {loading ? (
-              <AppText size="sm" color={colors.mutedForeground} style={{ textAlign: "center", paddingVertical: 40 }}>
-                Loading your rides…
-              </AppText>
-            ) : error ? (
-              <EmptyState
-                icon={<CalendarX2 size={28} color={colors.destructive} />}
-                title="Couldn't load rides"
-                body={error}
-                action={
-                  <Button variant="outline" onPress={() => load()}>
-                    <AppText size="sm" weight={600} color={colors.primary}>
-                      Try again
-                    </AppText>
-                  </Button>
-                }
+          data={list}
+          keyExtractor={(e) => `${e.rideId}-${e.relation}`}
+          renderItem={({ item: e, index: i }) => (
+            <Stagger index={i}>
+              <HistoryCard entry={e} />
+            </Stagger>
+          )}
+          ListHeaderComponent={
+            <>
+              <Tabs
+                columns={4}
+                value={tab}
+                onChange={setTab}
+                tabs={tabs}
               />
-            ) : list.length ? (
-              list.map((e, i) => (
-                <Stagger key={`${e.rideId}-${e.relation}`} index={i}>
-                  <HistoryCard entry={e} />
-                </Stagger>
-              ))
-            ) : (
+              <View style={{ marginTop: 16 }}>
+                {loading ? (
+                  <AppText size="sm" color={colors.mutedForeground} style={{ textAlign: "center", paddingVertical: 40 }}>
+                    Loading your rides…
+                  </AppText>
+                ) : error ? (
+                  <EmptyState
+                    icon={<CalendarX2 size={28} color={colors.destructive} />}
+                    title="Couldn't load rides"
+                    body={error}
+                    action={
+                      <Button variant="outline" onPress={() => load()}>
+                        <AppText size="sm" weight={600} color={colors.primary}>
+                          Try again
+                        </AppText>
+                      </Button>
+                    }
+                  />
+                ) : null}
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            !loading && !error ? (
               <EmptyState
                 icon={<CalendarX2 size={28} color={colors.primary} />}
                 title={`No ${tab} rides`}
@@ -181,9 +195,9 @@ export default function Activity() {
                   </Button>
                 }
               />
-            )}
-          </View>
-        </ScrollView>
+            ) : null
+          }
+        />
       </Screen>
     </PhoneShell>
   );

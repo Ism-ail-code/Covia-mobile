@@ -16,6 +16,7 @@ export function Chip({ children, active, onPress, style, textStyle }: Props) {
   return (
     <Comp
       onPress={onPress}
+      {...(onPress ? { accessibilityRole: "button" as const, accessibilityState: { selected: active ?? false } } : {})}
       style={[
         {
           flexDirection: "row",

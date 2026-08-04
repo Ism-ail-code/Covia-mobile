@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -24,6 +24,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const failedAttemptsRef = useRef(0);
+  const lastAttemptRef = useRef(0);
 
   const canSubmit = isValidEmail(email) && password.length > 0 && !busy;
 
@@ -39,15 +41,27 @@ export default function Login() {
       }
       return;
     }
+
+    const now = Date.now();
+    const elapsed = now - lastAttemptRef.current;
+    const minDelay = Math.min(1000 * Math.pow(2, failedAttemptsRef.current), 30000);
+    if (elapsed < minDelay) {
+      setError(`Too many attempts. Wait ${Math.ceil((minDelay - elapsed) / 1000)} seconds.`);
+      return;
+    }
+
     setError(null);
+    lastAttemptRef.current = now;
     try {
       const user = await signIn(email, password);
+      failedAttemptsRef.current = 0;
       if (!user.email_confirmed_at) {
         router.replace("/verify");
       } else {
         router.replace("/home");
       }
     } catch (err) {
+      failedAttemptsRef.current += 1;
       setError(authErrorMessage(err));
     }
   };
@@ -81,7 +95,12 @@ export default function Login() {
               value={password}
               onChangeText={setPassword}
               rightIcon={
-                <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                <Pressable
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={8}
+                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  accessibilityRole="button"
+                >
                   <Eye size={16} color={colors.mutedForeground} />
                 </Pressable>
               }

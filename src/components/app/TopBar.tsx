@@ -39,8 +39,8 @@ export function TopBar({ title, subtitle, back, onBack, action, style }: Props) 
           accessibilityLabel="Go back"
           style={({ pressed }) => [
             {
-              height: 40,
-              width: 40,
+              height: 44,
+              width: 44,
               borderRadius: radius.full,
               backgroundColor: colors.secondary,
               alignItems: "center",

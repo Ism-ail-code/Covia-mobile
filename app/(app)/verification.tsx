@@ -1,4 +1,4 @@
-﻿import { useCallback, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -62,6 +62,7 @@ export default function VerificationScreen() {
   const [studentMethod, setStudentMethod] = useState<"email" | "card">("card");
   const [universityEmail, setUniversityEmail] = useState("");
   const [picks, setPicks] = useState<Partial<Record<DocSlot, DocumentSource>>>({});
+  const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
     if (!user) {
@@ -73,14 +74,23 @@ export default function VerificationScreen() {
         getMyVerification("government_id"),
         getMyVerification("student"),
       ]);
+      if (!mountedRef.current) return;
       setSubmissions({ government_id: gov, student: stu });
       setError(null);
     } catch {
+      if (!mountedRef.current) return;
       setError("Couldn't load your verification status.");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -126,7 +136,7 @@ export default function VerificationScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!user) return;
+    if (!user || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -228,11 +238,16 @@ export default function VerificationScreen() {
           ) : (
             <>
               {error ? (
-                <StatusBanner
-                  tone="danger"
-                  icon={<XCircle size={16} color={colors.destructive} />}
-                  title={error}
-                />
+                <>
+                  <StatusBanner
+                    tone="danger"
+                    icon={<XCircle size={16} color={colors.destructive} />}
+                    title={error}
+                  />
+                  <Button variant="outline" style={{ height: 44, borderRadius: radius.lg }} onPress={load}>
+                    <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+                  </Button>
+                </>
               ) : null}
 
               {needsUpload ? (

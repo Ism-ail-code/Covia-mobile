@@ -139,8 +139,8 @@ export default function Safety() {
   };
 
   const handleSos = async () => {
-    if (!activeRide) {
-      toast.error("No active ride", { description: "SOS is available while your ride is in progress." });
+    if (!activeRide || sosBusy) {
+      if (!activeRide) toast.error("No active ride", { description: "SOS is available while your ride is in progress." });
       return;
     }
     setSosBusy(true);
@@ -159,7 +159,7 @@ export default function Safety() {
   };
 
   const handleSafe = async () => {
-    if (!activeRide) return;
+    if (!activeRide || checkBusy) return;
     setCheckBusy(true);
     try {
       await respondSafetyCheck(activeRide.rideId, true, true);
@@ -173,7 +173,7 @@ export default function Safety() {
   };
 
   const handleNeedHelp = async () => {
-    if (!activeRide) return;
+    if (!activeRide || checkBusy) return;
     setCheckBusy(true);
     try {
       await respondSafetyCheck(activeRide.rideId, false, false);
@@ -187,6 +187,7 @@ export default function Safety() {
   };
 
   const handleReport = async () => {
+    if (reporting) return;
     const note = incidentNote.trim();
     if (!note) {
       toast.error("Add a note", { description: "Tell us what happened first." });
@@ -224,6 +225,8 @@ export default function Safety() {
             onLongPress={handleSos}
             delayLongPress={800}
             disabled={sosBusy}
+            accessibilityLabel="Hold for SOS"
+            accessibilityRole="button"
             style={({ pressed }) => [
               {
                 alignItems: "center",
@@ -314,7 +317,7 @@ export default function Safety() {
                             Edit
                           </AppText>
                         </Pressable>
-                        <Pressable onPress={() => void handleRemove(c.id)} hitSlop={8} disabled={busy}>
+                        <Pressable onPress={() => void handleRemove(c.id)} hitSlop={8} disabled={busy} accessibilityLabel="Remove emergency contact" accessibilityRole="button">
                           <Trash2 size={16} color={colors.destructive} />
                         </Pressable>
                       </View>

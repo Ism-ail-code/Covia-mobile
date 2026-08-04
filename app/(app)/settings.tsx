@@ -8,6 +8,7 @@ import {
   Phone,
   LogOut,
   ChevronRight,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
@@ -23,11 +24,13 @@ import {
   updateNotificationPreferences,
 } from "@/services/notifications";
 import type { NotificationPreferences } from "@/types/notifications";
+import { formatVersionShort } from "@/lib/version";
 
 const accountItems: Array<{ icon: LucideIcon; label: string; to: string }> = [
   { icon: User, label: "Edit profile", to: "/create-profile" },
   { icon: BadgeCheck, label: "Verification status", to: "/verification" },
   { icon: Phone, label: "Emergency contacts", to: "/safety" },
+  { icon: MessageSquare, label: "Send feedback", to: "/feedback" },
 ];
 
 type BooleanPrefKey = {
@@ -48,6 +51,7 @@ export default function SettingsScreen() {
   const toast = useToast();
   const { signOut } = useAuth();
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
+  const [prefsError, setPrefsError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -56,7 +60,10 @@ export default function SettingsScreen() {
         if (mounted) setPrefs(p);
       })
       .catch(() => {
-        if (mounted) setPrefs(null);
+        if (mounted) {
+          setPrefs(null);
+          setPrefsError(true);
+        }
       });
     return () => {
       mounted = false;
@@ -96,9 +103,25 @@ export default function SettingsScreen() {
               </AppText>
             </View>
             {!prefs ? (
-              <AppText size="xs" color={colors.mutedForeground} style={{ paddingVertical: 12 }}>
-                Loading preferences…
-              </AppText>
+              prefsError ? (
+                <View style={{ paddingVertical: 12 }}>
+                  <AppText size="xs" color={colors.destructive} style={{ marginBottom: 8 }}>
+                    Couldn't load preferences.
+                  </AppText>
+                  <Button variant="outline" onPress={() => {
+                    setPrefsError(false);
+                    getNotificationPreferences()
+                      .then((p) => setPrefs(p))
+                      .catch(() => setPrefsError(true));
+                  }}>
+                    <AppText size="xs" weight={600} color={colors.primary}>Try again</AppText>
+                  </Button>
+                </View>
+              ) : (
+                <AppText size="xs" color={colors.mutedForeground} style={{ paddingVertical: 12 }}>
+                  Loading preferences…
+                </AppText>
+              )
             ) : (
               prefRows.map(({ key, label }, i) => (
                 <View
@@ -146,7 +169,7 @@ export default function SettingsScreen() {
             </AppText>
           </Button>
           <AppText size="xs" color={colors.mutedForeground} style={{ fontSize: 11, textAlign: "center", paddingBottom: 16 }}>
-            Covia v1.0.0
+            {formatVersionShort()}
           </AppText>
         </ScrollView>
       </Screen>

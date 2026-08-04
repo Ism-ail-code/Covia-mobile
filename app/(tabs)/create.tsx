@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { MapPin, Flag, Calendar, Clock, Users, Info, Minus, Plus } from "lucide-react-native";
+import { MapPin, Flag, Calendar, Clock, Users, Info, Minus, Plus, Loader2 } from "lucide-react-native";
 import { colors, radius, gutter } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -19,8 +19,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
 import { createRide, publishRide, validateRideInput, RideError } from "@/services/rides";
 import { PICKUP_TYPE_LABELS, type FareMode, type PickupType } from "@/types/ride";
-
-const naira = (n: number) => `₦${n.toLocaleString()}`;
+import { naira } from "@/lib/format";
 
 const PICKUP_OPTIONS = Object.entries(PICKUP_TYPE_LABELS) as Array<[PickupType, string]>;
 
@@ -224,10 +223,12 @@ export default function CreateRide() {
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <Pressable
                   onPress={() => setSeats((s) => Math.max(1, s - 1))}
+                  accessibilityLabel="Decrease seats"
+                  accessibilityRole="button"
                   style={({ pressed }) => [
                     {
-                      height: 36,
-                      width: 36,
+                      height: 44,
+                      width: 44,
                       borderRadius: radius.xl,
                       backgroundColor: colors.secondary,
                       alignItems: "center",
@@ -240,10 +241,12 @@ export default function CreateRide() {
                 </Pressable>
                 <Pressable
                   onPress={() => setSeats((s) => Math.min(10, s + 1))}
+                  accessibilityLabel="Increase seats"
+                  accessibilityRole="button"
                   style={({ pressed }) => [
                     {
-                      height: 36,
-                      width: 36,
+                      height: 44,
+                      width: 44,
                       borderRadius: radius.xl,
                       backgroundColor: colors.secondary,
                       alignItems: "center",
@@ -329,9 +332,13 @@ export default function CreateRide() {
               </AppText>
             </Button>
             <Button style={{ flex: 1, height: 52, borderRadius: radius.lg }} onPress={submit} disabled={busy}>
-              <AppText size="base" weight={600} color={colors.primaryForeground}>
-                {busy ? "Publishing…" : "Publish"}
-              </AppText>
+              {busy ? (
+                <Loader2 size={16} color={colors.primaryForeground} />
+              ) : (
+                <AppText size="base" weight={600} color={colors.primaryForeground}>
+                  Publish
+                </AppText>
+              )}
             </Button>
           </View>
         </ScrollView>

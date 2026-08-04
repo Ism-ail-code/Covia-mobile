@@ -12,6 +12,9 @@ type Props = {
 export function Progress({ value = 0, trackHeight = 6, style }: Props) {
   return (
     <View
+      accessibilityRole="progressbar"
+      accessibilityState={{ busy: value < 100 }}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(value) }}
       style={[
         {
           height: trackHeight,

@@ -14,6 +14,9 @@ export function Switch({ value, onValueChange, disabled, style }: Props) {
     <Pressable
       disabled={disabled}
       onPress={() => onValueChange?.(!value)}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled: disabled ?? false }}
+      hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
       style={[
         {
           height: 20,

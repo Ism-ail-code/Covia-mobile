@@ -39,6 +39,8 @@ export function Tabs<T extends string>({ tabs, value, onChange, columns, style }
           <Pressable
             key={t.value}
             onPress={() => onChange?.(t.value)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
             style={[
               {
                 flex: grid ? 1 / columns : undefined,

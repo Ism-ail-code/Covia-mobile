@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Check,
   X,
+  Loader2,
 } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
@@ -47,8 +48,7 @@ import {
   type RideRequestWithPassenger,
   type RideTimelineEvent,
 } from "@/types/ride";
-
-const naira = (n: number) => `₦${n.toLocaleString()}`;
+import { naira } from "@/lib/format";
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -77,6 +77,7 @@ export default function RideDetails() {
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const mountedRef = useRef(true);
 
   const load = useCallback(
     async (notify = true) => {
@@ -88,17 +89,19 @@ export default function RideDetails() {
           getRideParticipants(rideId),
           getRideTimeline(rideId),
         ]);
+        if (!mountedRef.current) return;
         setRide(r);
         setParticipants(members);
         setTimeline(events);
         if (r.hostId === me) {
           const queue = await getRideRequests(rideId).catch(() => [] as RideRequestWithPassenger[]);
-          setRequests(queue);
+          if (mountedRef.current) setRequests(queue);
         }
       } catch (e) {
+        if (!mountedRef.current) return;
         setError(e instanceof RideError ? e.message : "Couldn't load this ride.");
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
       return notify;
     },
@@ -106,7 +109,11 @@ export default function RideDetails() {
   );
 
   useEffect(() => {
+    mountedRef.current = true;
     load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   const isHost = ride?.hostId === me;
@@ -355,9 +362,9 @@ export default function RideDetails() {
                           onPress={() =>
                             act(() => hostRespondToRequest(r.id, true), "Request approved — seat confirmed.")
                           }
-                          style={{ height: 34, width: 34, borderRadius: radius.md, backgroundColor: colors.successSoft }}
+                          style={{ height: 44, width: 44, borderRadius: radius.md, backgroundColor: colors.successSoft }}
                         >
-                          <Check size={16} color={colors.success} />
+                          {busy ? <Loader2 size={16} color={colors.success} /> : <Check size={16} color={colors.success} />}
                         </IconButton>
                         <IconButton
                           accessibilityLabel="Reject request"
@@ -365,9 +372,9 @@ export default function RideDetails() {
                           onPress={() =>
                             act(() => hostRespondToRequest(r.id, false), "Request declined.")
                           }
-                          style={{ height: 34, width: 34, borderRadius: radius.md, backgroundColor: colors.destructiveSoft }}
+                          style={{ height: 44, width: 44, borderRadius: radius.md, backgroundColor: colors.destructiveSoft }}
                         >
-                          <X size={16} color={colors.destructive} />
+                          {busy ? <Loader2 size={16} color={colors.destructive} /> : <X size={16} color={colors.destructive} />}
                         </IconButton>
                       </View>
                     </View>
@@ -436,9 +443,13 @@ export default function RideDetails() {
                   onPress={() => act(() => startRide(ride.id), "Ride started — be safe!")}
                   disabled={busy}
                 >
-                  <AppText size="base" weight={600} color={colors.primaryForeground}>
-                    Start ride
-                  </AppText>
+                  {busy ? (
+                    <Loader2 size={16} color={colors.primaryForeground} />
+                  ) : (
+                    <AppText size="base" weight={600} color={colors.primaryForeground}>
+                      Start ride
+                    </AppText>
+                  )}
                 </Button>
               </>
             ) : ride.rideStatus === "in_progress" ? (
@@ -447,9 +458,13 @@ export default function RideDetails() {
                 onPress={() => act(() => completeRide(ride.id), "Ride completed — you can rate your Covians.")}
                 disabled={busy}
               >
-                <AppText size="base" weight={600} color={colors.primaryForeground}>
-                  Complete ride
-                </AppText>
+                {busy ? (
+                  <Loader2 size={16} color={colors.primaryForeground} />
+                ) : (
+                  <AppText size="base" weight={600} color={colors.primaryForeground}>
+                    Complete ride
+                  </AppText>
+                )}
               </Button>
             ) : null}
           </>
@@ -461,9 +476,13 @@ export default function RideDetails() {
             }
             disabled={busy}
           >
-            <AppText size="base" weight={600} color={colors.primaryForeground}>
-              Request a seat · {fare}
-            </AppText>
+            {busy ? (
+              <Loader2 size={16} color={colors.primaryForeground} />
+            ) : (
+              <AppText size="base" weight={600} color={colors.primaryForeground}>
+                Request a seat · {fare}
+              </AppText>
+            )}
           </Button>
         ) : isMember ? (
           <Button
@@ -483,9 +502,13 @@ export default function RideDetails() {
             onPress={() => act(() => cancelRideRequest(myRequest.id), "Request withdrawn.")}
             disabled={busy}
           >
-            <AppText size="sm" weight={600} color={colors.secondaryForeground}>
-              Withdraw request
-            </AppText>
+            {busy ? (
+              <Loader2 size={16} color={colors.secondaryForeground} />
+            ) : (
+              <AppText size="sm" weight={600} color={colors.secondaryForeground}>
+                Withdraw request
+              </AppText>
+            )}
           </Button>
         ) : null}
       </View>
@@ -516,9 +539,13 @@ export default function RideDetails() {
             }}
             disabled={busy}
           >
-            <AppText size="sm" weight={600} color={colors.primaryForeground}>
-              Cancel ride
-            </AppText>
+            {busy ? (
+              <Loader2 size={16} color={colors.primaryForeground} />
+            ) : (
+              <AppText size="sm" weight={600} color={colors.primaryForeground}>
+                Cancel ride
+              </AppText>
+            )}
           </Button>
         </View>
       </Dialog>
@@ -545,9 +572,13 @@ export default function RideDetails() {
             }}
             disabled={busy}
           >
-            <AppText size="sm" weight={600} color={colors.primaryForeground}>
-              Leave ride
-            </AppText>
+            {busy ? (
+              <Loader2 size={16} color={colors.primaryForeground} />
+            ) : (
+              <AppText size="sm" weight={600} color={colors.primaryForeground}>
+                Leave ride
+              </AppText>
+            )}
           </Button>
         </View>
       </Dialog>

@@ -1,3 +1,4 @@
+import React from "react";
 import { Pressable, View, type StyleProp, type ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { Clock, Users, Sparkles, BadgeCheck } from "lucide-react-native";
@@ -9,8 +10,7 @@ import { Chip } from "@/components/ui/Chip";
 import { Shimmer } from "@/components/ui/animations";
 import { Rating } from "./Badges";
 import { RouteLine } from "./RouteLine";
-
-const naira = (n: number) => `₦${n.toLocaleString()}`;
+import { naira } from "@/lib/format";
 
 function formatDeparture(iso: string): { date: string; time: string } {
   const d = new Date(iso);
@@ -24,7 +24,7 @@ function formatDeparture(iso: string): { date: string; time: string } {
   return { date, time };
 }
 
-export function RideCard({
+export const RideCard = React.memo(function RideCard({
   ride,
   style,
   onPress,
@@ -163,7 +163,7 @@ export function RideCard({
       ) : null}
     </Pressable>
   );
-}
+});
 
 export function RideCardSkeleton({ style }: { style?: StyleProp<ViewStyle> }) {
   return (

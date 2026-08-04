@@ -369,6 +369,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       emailVerified,
+      isAdmin,
+      adminRole,
       busy,
       resetReady,
       resetError,

@@ -15,12 +15,15 @@ export function Checkbox({ value = false, onValueChange, disabled, style }: Prop
     <Pressable
       disabled={disabled}
       onPress={() => onValueChange?.(!value)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: value, disabled }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={({ pressed }) => [
         {
-          height: 16,
-          width: 16,
-          borderRadius: 4,
-          borderWidth: 1,
+          height: 20,
+          width: 20,
+          borderRadius: 5,
+          borderWidth: 1.5,
           borderColor: colors.primary,
           backgroundColor: value ? colors.primary : "transparent",
           alignItems: "center",
@@ -30,7 +33,7 @@ export function Checkbox({ value = false, onValueChange, disabled, style }: Prop
         style,
       ]}
     >
-      {value ? <Check size={12} color={colors.primaryForeground} strokeWidth={3} /> : null}
+      {value ? <Check size={14} color={colors.primaryForeground} strokeWidth={3} /> : null}
     </Pressable>
   );
 }

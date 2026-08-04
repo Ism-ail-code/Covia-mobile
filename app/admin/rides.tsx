@@ -13,12 +13,11 @@ import { Button } from "@/components/ui/Button";
 import { AdminTabBar } from "@/components/admin/AdminTabBar";
 import { adminSearchRides } from "@/services/admin";
 import type { AdminRideRow } from "@/types/admin";
+import { naira } from "@/lib/format";
 
 const STATUS_FILTERS = ["All", "published", "in_progress", "completed", "cancelled", "expired"];
 
 const PAGE_SIZE = 30;
-
-const naira = (n: number) => `₦${n.toLocaleString()}`;
 
 function RideRow({ ride }: { ride: AdminRideRow }) {
   const router = useRouter();

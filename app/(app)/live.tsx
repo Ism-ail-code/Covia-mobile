@@ -32,21 +32,23 @@ export default function LiveRide() {
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const rideIdRef = useRef<string | null>(null);
+  const pollSeqRef = useRef(0);
 
   const loadData = useCallback(async (rideId: string, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
+    const seq = ++pollSeqRef.current;
     try {
       const [members, events] = await Promise.all([
         getRideParticipants(rideId).catch(() => [] as RideParticipant[]),
         getRideTimeline(rideId).catch(() => [] as RideTimelineEvent[]),
       ]);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || seq !== pollSeqRef.current) return;
       setParticipants(members);
       setTimeline(events);
     } catch {
       // Silently handle errors on refresh
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && seq === pollSeqRef.current) {
         setRefreshing(false);
         setLoading(false);
       }
@@ -129,11 +131,24 @@ export default function LiveRide() {
             title="No live ride"
             body={error ?? "Start or join a ride to see live tracking here."}
             action={
-              <Button block style={{ height: 48, borderRadius: 16 }} onPress={() => router.push("/explore")}>
-                <AppText size="sm" weight={600} color={colors.primaryForeground}>
-                  Browse rides
-                </AppText>
-              </Button>
+              <View style={{ gap: 10, width: "100%" }}>
+                {error ? (
+                  <Button variant="outline" block style={{ height: 48, borderRadius: 16 }} onPress={() => {
+                    setError(null);
+                    setLoading(true);
+                    mountedRef.current = true;
+                    rideIdRef.current = null;
+                    void loadData(String(Date.now()));
+                  }}>
+                    <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+                  </Button>
+                ) : null}
+                <Button block style={{ height: 48, borderRadius: 16 }} onPress={() => router.push("/explore")}>
+                  <AppText size="sm" weight={600} color={colors.primaryForeground}>
+                    Browse rides
+                  </AppText>
+                </Button>
+              </View>
             }
           />
         </Screen>

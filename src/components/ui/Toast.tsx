@@ -98,6 +98,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <Pressable
                 hitSlop={8}
                 onPress={() => setItems((prev) => prev.filter((x) => x.id !== t.id))}
+                accessibilityLabel="Dismiss"
+                accessibilityRole="button"
               >
                 <X size={14} color={fg} />
               </Pressable>

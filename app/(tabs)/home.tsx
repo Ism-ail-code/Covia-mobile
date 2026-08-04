@@ -31,6 +31,7 @@ import {
   subscribeToNotificationChanges,
 } from "@/services/notifications";
 import type { Ride, RideHistoryEntry } from "@/types/ride";
+import { naira } from "@/lib/format";
 
 const quick: Array<{ label: string; icon: LucideIcon; to: "/create" | "/explore" | "/safety" | "/activity" }> = [
   { label: "Create ride", icon: Plus, to: "/create" },
@@ -38,8 +39,6 @@ const quick: Array<{ label: string; icon: LucideIcon; to: "/create" | "/explore"
   { label: "Safety", icon: ShieldCheck, to: "/safety" },
   { label: "Activity", icon: Clock, to: "/activity" },
 ];
-
-const naira = (n: number) => `₦${n.toLocaleString()}`;
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -139,8 +138,6 @@ export default function Home() {
       offRead();
     };
   }, []);
-
-  const recommended = useMemo(() => feed, [feed]);
 
   return (
     <PhoneShell>
@@ -385,11 +382,11 @@ export default function Home() {
           )}
         </View>
 
-        {!loading && recommended.length > 0 ? (
+        {!loading && feed.length > 0 ? (
           <View style={{ marginTop: 28 }}>
             <SectionHeader title="Recommended for you" />
             <View style={{ paddingHorizontal: gutter, gap: 12 }}>
-              {recommended.map((r) => (
+              {feed.map((r) => (
                 <RideCard key={r.id} ride={r} />
               ))}
             </View>

@@ -14,6 +14,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { colors } from "@/theme";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -66,13 +67,15 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <StatusBar style="dark" />
-          <RootNavigator />
-        </ToastProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <StatusBar style="dark" />
+            <RootNavigator />
+          </ToastProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

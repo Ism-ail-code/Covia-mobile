@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, RefreshControl, ScrollView, View } from "react-native";
 import { Search, SlidersHorizontal, MapPin, RefreshCw } from "lucide-react-native";
 import { colors, gutter, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
@@ -161,85 +161,96 @@ export default function Explore() {
           }
         />
 
-        <ScrollView
+        <FlatList
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 16 }}
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
-        >
-          <View style={{ paddingHorizontal: gutter, paddingTop: 16 }}>
-            <Input
-              icon={<Search size={16} color={colors.mutedForeground} />}
-              placeholder="Search destination or landmark"
-              value={query}
-              onChangeText={setQuery}
-              containerStyle={{ minHeight: 48 }}
-              style={{
-                height: 48,
-                borderRadius: radius.lg,
-                backgroundColor: colors.card,
-                paddingLeft: 40,
-                ...shadows.soft,
-              }}
-            />
-          </View>
+          data={rides}
+          keyExtractor={(r) => r.id}
+          renderItem={({ item: r, index: i }) => (
+            <Stagger index={i}>
+              <View style={{ paddingHorizontal: gutter }}>
+                <RideCard ride={r} />
+              </View>
+            </Stagger>
+          )}
+          ListHeaderComponent={
+            <>
+              <View style={{ paddingHorizontal: gutter, paddingTop: 16 }}>
+                <Input
+                  icon={<Search size={16} color={colors.mutedForeground} />}
+                  placeholder="Search destination or landmark"
+                  value={query}
+                  onChangeText={setQuery}
+                  containerStyle={{ minHeight: 48 }}
+                  style={{
+                    height: 48,
+                    borderRadius: radius.lg,
+                    backgroundColor: colors.card,
+                    paddingLeft: 40,
+                    ...shadows.soft,
+                  }}
+                />
+              </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: gutter, paddingVertical: 16, gap: 8 }}
-          >
-            {chips.map((f) => (
-              <Chip key={f} active={active === f} onPress={() => setActive(f)}>
-                {f}
-              </Chip>
-            ))}
-          </ScrollView>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: gutter, paddingVertical: 16, gap: 8 }}
+              >
+                {chips.map((f) => (
+                  <Chip key={f} active={active === f} onPress={() => setActive(active === f ? "All" : f)}>
+                    {f}
+                  </Chip>
+                ))}
+              </ScrollView>
 
-          {error ? (
-            <View style={{ paddingHorizontal: gutter }}>
+              {error ? (
+                <View style={{ paddingHorizontal: gutter }}>
+                  <EmptyState
+                    icon={<RefreshCw size={28} color={colors.destructive} />}
+                    title="Couldn't load rides"
+                    body={error}
+                    action={
+                      <Button variant="outline" onPress={refresh}>
+                        <AppText size="sm" weight={600} color={colors.primary}>
+                          Try again
+                        </AppText>
+                      </Button>
+                    }
+                  />
+                </View>
+              ) : loading ? (
+                <View style={{ paddingHorizontal: gutter, gap: 12 }}>
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <RideCardSkeleton key={i} />
+                  ))}
+                </View>
+              ) : null}
+            </>
+          }
+          ListEmptyComponent={
+            !loading && !error && rides.length === 0 ? (
               <EmptyState
-                icon={<RefreshCw size={28} color={colors.destructive} />}
-                title="Couldn't load rides"
-                body={error}
-                action={
-                  <Button variant="outline" onPress={refresh}>
-                    <AppText size="sm" weight={600} color={colors.primary}>
-                      Try again
-                    </AppText>
-                  </Button>
-                }
+                icon={<MapPin size={28} color={colors.primary} />}
+                title="No rides match yet"
+                body="Try widening your filters, or create a ride and let Covians come to you."
               />
-            </View>
-          ) : loading ? (
-            <View style={{ paddingHorizontal: gutter, gap: 12 }}>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <RideCardSkeleton key={i} />
-              ))}
-            </View>
-          ) : rides.length ? (
-            <View style={{ paddingHorizontal: gutter, gap: 12 }}>
-              {rides.map((r, i) => (
-                <Stagger key={r.id} index={i}>
-                  <RideCard ride={r} />
-                </Stagger>
-              ))}
-              {!clientFiltersActive && rides.length < total ? (
-                <Button variant="outline" onPress={loadMore} disabled={loading} style={{ marginTop: 4 }}>
+            ) : null
+          }
+          ListFooterComponent={
+            !clientFiltersActive && rides.length > 0 && rides.length < total ? (
+              <View style={{ paddingHorizontal: gutter, marginTop: 4 }}>
+                <Button variant="outline" onPress={loadMore} disabled={loading}>
                   <AppText size="sm" weight={600} color={colors.primary}>
                     {loading ? "Loading…" : `Load more (${total - rides.length} left)`}
                   </AppText>
                 </Button>
-              ) : null}
-            </View>
-          ) : (
-            <EmptyState
-              icon={<MapPin size={28} color={colors.primary} />}
-              title="No rides match yet"
-              body="Try widening your filters, or create a ride and let Covians come to you."
-            />
-          )}
-        </ScrollView>
+              </View>
+            ) : null
+          }
+        />
       </Screen>
 
       <BottomSheet

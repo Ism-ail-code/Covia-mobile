@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Bell, Check, X, UserPlus, CalendarX, Clock, Play, Flag, ShieldAlert, CheckCheck } from "lucide-react-native";
+import { Bell, Check, X, UserPlus, CalendarX, Clock, Play, Flag, ShieldAlert, CheckCheck, RefreshCw } from "lucide-react-native";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
@@ -9,6 +9,7 @@ import { TopBar } from "@/components/app/TopBar";
 import { EmptyState } from "@/components/app/EmptyState";
 import { Stagger } from "@/components/ui/animations";
 import { useToast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
 import {
   deleteNotification,
   getNotifications,
@@ -73,6 +74,70 @@ const timeAgo = (iso: string) => {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
+const NotificationItem = React.memo(function NotificationItem({
+  n,
+  onPress,
+  onDelete,
+}: {
+  n: AppNotification;
+  onPress: () => void;
+  onDelete: () => void;
+}) {
+  const Icon = icons[n.type] ?? Bell;
+  const danger = dangerKinds.has(n.type);
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          flexDirection: "row",
+          gap: 12,
+          borderRadius: 16,
+          borderWidth: 1,
+          padding: 16,
+          borderColor: !n.isRead ? `${colors.primary}33` : colors.border,
+          backgroundColor: !n.isRead ? `${colors.primarySoft}80` : colors.card,
+          opacity: pressed ? 0.9 : 1,
+        },
+      ]}
+    >
+      <View
+        style={{
+          height: 36,
+          width: 36,
+          borderRadius: radius.xl,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: danger ? colors.destructiveSoft : colors.primarySoft,
+        }}
+      >
+        <Icon size={18} color={danger ? colors.destructive : colors.primary} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+          <AppText size="sm" weight={600} numberOfLines={1} style={{ flex: 1 }}>
+            {n.title}
+          </AppText>
+          <AppText size="xs" color={colors.mutedForeground} style={{ fontSize: 11 }}>
+            {timeAgo(n.createdAt)}
+          </AppText>
+        </View>
+        <AppText size="xs" color={colors.mutedForeground} style={{ marginTop: 2 }} numberOfLines={2}>
+          {n.message}
+        </AppText>
+      </View>
+      <Pressable
+        accessibilityLabel="Delete notification"
+        onPress={onDelete}
+        hitSlop={8}
+        style={{ alignSelf: "center" }}
+      >
+        <X size={14} color={colors.mutedForeground} />
+      </Pressable>
+    </Pressable>
+  );
+});
+
 export default function Notifications() {
   const router = useRouter();
   const toast = useToast();
@@ -81,6 +146,7 @@ export default function Notifications() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const loadedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -96,8 +162,9 @@ export default function Notifications() {
     (async () => {
       try {
         await load();
+        setLoadError(null);
       } catch (e) {
-        toast.error((e as Error).message || "Couldn't load notifications.");
+        setLoadError((e as Error).message || "Couldn't load notifications.");
       } finally {
         setLoading(false);
       }
@@ -186,87 +253,62 @@ export default function Notifications() {
         }
       />
       <Screen>
-        <ScrollView
+        <FlatList
+          data={items}
+          keyExtractor={(n) => n.id}
+          renderItem={({ item: n, index: i }) => (
+            <Stagger index={i}>
+              <NotificationItem
+                n={n}
+                onPress={() => open(n)}
+                onDelete={() => remove(n.id)}
+              />
+            </Stagger>
+          )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
           contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 10, flexGrow: 1 }}
-        >
-          {items.length ? (
-            items.map((n, i) => {
-              const Icon = icons[n.type] ?? Bell;
-              const danger = dangerKinds.has(n.type);
-              return (
-                <Stagger key={n.id} index={i}>
-                  <Pressable
-                    onPress={() => open(n)}
-                    style={({ pressed }) => [
-                      {
-                        flexDirection: "row",
-                        gap: 12,
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        padding: 16,
-                        borderColor: !n.isRead ? `${colors.primary}33` : colors.border,
-                        backgroundColor: !n.isRead ? `${colors.primarySoft}80` : colors.card,
-                        opacity: pressed ? 0.9 : 1,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={{
-                        height: 36,
-                        width: 36,
-                        borderRadius: radius.xl,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: danger ? colors.destructiveSoft : colors.primarySoft,
-                      }}
-                    >
-                      <Icon size={18} color={danger ? colors.destructive : colors.primary} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-                        <AppText size="sm" weight={600} numberOfLines={1} style={{ flex: 1 }}>
-                          {n.title}
-                        </AppText>
-                        <AppText size="xs" color={colors.mutedForeground} style={{ fontSize: 11 }}>
-                          {timeAgo(n.createdAt)}
-                        </AppText>
-                      </View>
-                      <AppText size="xs" color={colors.mutedForeground} style={{ marginTop: 2 }} numberOfLines={2}>
-                        {n.message}
-                      </AppText>
-                    </View>
-                    <Pressable
-                      accessibilityLabel="Delete notification"
-                      onPress={() => remove(n.id)}
-                      hitSlop={8}
-                      style={{ alignSelf: "center" }}
-                    >
-                      <X size={14} color={colors.mutedForeground} />
-                    </Pressable>
-                  </Pressable>
-                </Stagger>
-              );
-            })
-          ) : loading ? (
-            <View style={{ padding: 40, alignItems: "center", gap: 8 }}>
-              <AppText size="sm" color={colors.mutedForeground}>
-                Loading notifications…
+          ListHeaderComponent={
+            loading ? (
+              <View style={{ padding: 40, alignItems: "center", gap: 8 }}>
+                <AppText size="sm" color={colors.mutedForeground}>
+                  Loading notifications…
+                </AppText>
+              </View>
+            ) : loadError ? (
+              <EmptyState
+                icon={<RefreshCw size={28} color={colors.destructive} />}
+                title="Couldn't load notifications"
+                body={loadError}
+                action={
+                  <Button variant="outline" onPress={() => {
+                    setLoadError(null);
+                    setLoading(true);
+                    loadedRef.current = false;
+                    load().then(() => setLoadError(null)).catch((e) => setLoadError((e as Error).message)).finally(() => setLoading(false));
+                  }}>
+                    <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+                  </Button>
+                }
+              />
+            ) : null
+          }
+          ListEmptyComponent={
+            !loading && !loadError ? (
+              <EmptyState
+                icon={<Bell size={28} color={colors.primary} />}
+                title="Nothing new"
+                body="Ride updates and safety alerts will appear here."
+              />
+            ) : null
+          }
+          ListFooterComponent={
+            !loading && items.length > 0 && items.length < totalCount ? (
+              <AppText size="xs" color={colors.mutedForeground} style={{ textAlign: "center", paddingTop: 8 }}>
+                {items.length} of {totalCount} — pull to load the rest
               </AppText>
-            </View>
-          ) : (
-            <EmptyState
-              icon={<Bell size={28} color={colors.primary} />}
-              title="Nothing new"
-              body="Ride updates and safety alerts will appear here."
-            />
-          )}
-          {!loading && items.length > 0 && items.length < totalCount ? (
-            <AppText size="xs" color={colors.mutedForeground} style={{ textAlign: "center", paddingTop: 8 }}>
-              {items.length} of {totalCount} — pull to load the rest
-            </AppText>
-          ) : null}
-        </ScrollView>
+            ) : null
+          }
+        />
       </Screen>
     </PhoneShell>
   );

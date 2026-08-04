@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Flag, Star, UserX } from "lucide-react-native";
@@ -45,30 +45,36 @@ export default function UserProfile() {
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const mountedRef = useRef(true);
+
+  const loadProfile = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [p, page] = await Promise.all([
+        getPublicProfile(userId),
+        getUserRatings(userId, 1, 10),
+      ]);
+      if (!mountedRef.current) return;
+      if (!p) throw new Error("We couldn't find that Covian.");
+      setProfile(p);
+      setRatings(page.items);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setError((e as Error).message || "Couldn't load this profile.");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const [p, page] = await Promise.all([
-          getPublicProfile(userId),
-          getUserRatings(userId, 1, 10),
-        ]);
-        if (cancelled) return;
-        if (!p) throw new Error("We couldn't find that Covian.");
-        setProfile(p);
-        setRatings(page.items);
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message || "Couldn't load this profile.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+    mountedRef.current = true;
+    void loadProfile();
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
-  }, [userId]);
+  }, [loadProfile]);
 
   const openReport = () => {
     setReason(null);
@@ -114,6 +120,11 @@ export default function UserProfile() {
             icon={<UserX size={28} color={colors.mutedForeground} />}
             title="Profile not found"
             body={error ?? "This Covian doesn't exist."}
+            action={error ? (
+              <Button variant="outline" style={{ height: 44, borderRadius: radius.lg }} onPress={loadProfile}>
+                <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+              </Button>
+            ) : undefined}
           />
         </Screen>
       </PhoneShell>

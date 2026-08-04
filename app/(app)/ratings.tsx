@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Star } from "lucide-react-native";
@@ -54,6 +54,8 @@ export default function Ratings() {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   // Reset stars and comment when rateable target changes
   useEffect(() => {
@@ -61,42 +63,47 @@ export default function Ratings() {
     setComment("");
   }, [rateable?.rideId, rateable?.target.rateeUserId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const me = user?.id;
-        if (!me) throw new Error("Please sign in again.");
-        const [mySummary, myReviews] = await Promise.all([
-          getMyTrustSummary(),
-          getUserRatings(me, 1, 10),
-        ]);
-        if (cancelled) return;
-        setSummary(mySummary);
-        setReceived(myReviews.items);
+  const loadRatings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const me = user?.id;
+      if (!me) throw new Error("Please sign in again.");
+      const [mySummary, myReviews] = await Promise.all([
+        getMyTrustSummary(),
+        getUserRatings(me, 1, 10),
+      ]);
+      if (!mountedRef.current) return;
+      setSummary(mySummary);
+      setReceived(myReviews.items);
 
-        const history = await getRideHistory(null, null, 1, 20);
-        if (cancelled) return;
-        const completed = history.entries.find((e) => e.rideStatus === "completed");
-        if (completed) {
-          const statuses = await getRideRatingStatus(completed.rideId).catch(() => [] as RideRatingStatus[]);
-          if (cancelled) return;
-          const target = statuses.find((s) => s.ratingId == null && !s.windowExpired);
-          if (target) setRateable({ rideId: completed.rideId, target });
-        }
-      } catch (e) {
-        if (!cancelled) toast.error((e as Error).message || "Couldn't load your ratings.");
-      } finally {
-        if (!cancelled) setLoading(false);
+      const history = await getRideHistory(null, null, 1, 20);
+      if (!mountedRef.current) return;
+      const completed = history.entries.find((e) => e.rideStatus === "completed");
+      if (completed) {
+        const statuses = await getRideRatingStatus(completed.rideId).catch(() => [] as RideRatingStatus[]);
+        if (!mountedRef.current) return;
+        const target = statuses.find((s) => s.ratingId == null && !s.windowExpired);
+        if (target) setRateable({ rideId: completed.rideId, target });
       }
-    })();
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setLoadError((e as Error).message || "Couldn't load your ratings.");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    void loadRatings();
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
-  }, [user?.id, toast]);
+  }, [loadRatings]);
 
   const submit = useCallback(async () => {
-    if (!rateable) return;
+    if (!rateable || submitting) return;
     if (stars < 1) {
       toast.error("Pick a star rating", { description: "Tap a star to rate your Covian." });
       return;
@@ -120,6 +127,18 @@ export default function Ratings() {
     <PhoneShell>
       <TopBar title="Ratings & reviews" back onBack={() => router.back()} />
       <Screen>
+        {loadError && !loading ? (
+          <EmptyState
+            icon={<Star size={28} color={colors.destructive} />}
+            title="Couldn't load ratings"
+            body={loadError}
+            action={
+              <Button variant="outline" style={{ height: 44, borderRadius: radius.lg }} onPress={loadRatings}>
+                <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+              </Button>
+            }
+          />
+        ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}>
           <View style={[styles.card, { alignItems: "center" }]}>
             <AppText family="display" weight={800} style={{ fontSize: 36, lineHeight: 44 }}>
@@ -211,6 +230,7 @@ export default function Ratings() {
             />
           )}
         </ScrollView>
+        )}
       </Screen>
     </PhoneShell>
   );

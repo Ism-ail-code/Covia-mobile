@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, TextInput, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, Pressable, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Send, Lock } from "lucide-react-native";
+import { Send, Lock, Loader2 } from "lucide-react-native";
 import { colors, radius } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconButton } from "@/components/ui/Button";
+import { IconButton, Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/app/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/context/AuthContext";
@@ -24,7 +24,7 @@ import type { Chat, ChatMessage } from "@/types/chat";
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
-function Bubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
+const Bubble = React.memo(function Bubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
   if (!mine && m.senderId == null) {
     return (
       <View
@@ -79,7 +79,7 @@ function Bubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
       </View>
     </View>
   );
-}
+});
 
 export default function Chat() {
   const router = useRouter();
@@ -92,20 +92,31 @@ export default function Chat() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<FlatList<ChatMessage>>(null);
   const loadedRide = useRef<string | null>(null);
+
+  const mountedRef = useRef(true);
 
   const resolveChatId = useCallback(
     async (rideId: string): Promise<string | null> => {
       const chatId = await getChatForRide(rideId);
-      if (!chatId) return null;
+      if (!chatId || !mountedRef.current) return null;
       const loaded = await getChat(chatId);
+      if (!mountedRef.current) return null;
       setChat(loaded);
       return chatId;
     },
     [],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!rideId || loadedRide.current === rideId) return;
@@ -168,15 +179,18 @@ export default function Chat() {
   }, [text, chat, sending, toast]);
 
   const loadEarlier = useCallback(async () => {
-    if (!chat || messages.length === 0) return;
+    if (!chat || messages.length === 0 || loadingEarlier) return;
+    setLoadingEarlier(true);
     try {
       const page = await getChatMessages(chat.id, messages[0].sentAt, 40);
       setMessages((prev) => [...page.items.filter((m) => !prev.some((p) => p.id === m.id)), ...prev]);
       setTotalCount(page.totalCount);
     } catch {
       toast.error("Couldn't load earlier messages.");
+    } finally {
+      setLoadingEarlier(false);
     }
-  }, [chat, messages, toast]);
+  }, [chat, messages, toast, loadingEarlier]);
 
   const locked = chat ? chat.lockedAt != null && new Date(chat.lockedAt).getTime() < Date.now() : false;
 
@@ -213,25 +227,51 @@ export default function Chat() {
             icon={<Lock size={28} color={colors.mutedForeground} />}
             title="Chat unavailable"
             body={error ?? "This ride has no chat yet."}
+            action={error ? (
+              <Button variant="outline" style={{ height: 44, borderRadius: radius.lg }} onPress={() => {
+                setError(null);
+                setLoading(true);
+                loadedRide.current = null;
+                void resolveChatId(rideId!).then((chatId) => {
+                  if (!chatId || !mountedRef.current) return;
+                  void getChatMessages(chatId, null, 40).then((page) => {
+                    if (!mountedRef.current) return;
+                    setMessages(page.items);
+                    setTotalCount(page.totalCount);
+                  });
+                }).finally(() => {
+                  if (mountedRef.current) setLoading(false);
+                });
+              }}>
+                <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+              </Button>
+            ) : undefined}
           />
         ) : (
-          <ScrollView
+          <FlatList
             ref={scrollRef}
             style={{ flex: 1, backgroundColor: `${colors.surface}99` }}
             contentContainerStyle={{ padding: 16, gap: 12 }}
+            data={messages}
+            keyExtractor={(m) => m.id}
+            renderItem={({ item }) => <Bubble m={item} mine={item.senderId === user?.id} />}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-          >
-            {messages.length < totalCount ? (
-              <Pressable onPress={loadEarlier} style={{ alignSelf: "center", padding: 8 }}>
-                <AppText size="xs" weight={600} color={colors.primary}>
-                  Load earlier messages
-                </AppText>
-              </Pressable>
-            ) : null}
-            {messages.map((m) => (
-              <Bubble key={m.id} m={m} mine={m.senderId === user?.id} />
-            ))}
-            {messages.length === 0 ? (
+            ListHeaderComponent={
+              messages.length < totalCount ? (
+                <Pressable
+                  onPress={loadEarlier}
+                  disabled={loadingEarlier}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ alignSelf: "center", padding: 8, flexDirection: "row", alignItems: "center", gap: 6, opacity: loadingEarlier ? 0.5 : 1 }}
+                >
+                  {loadingEarlier ? <Loader2 size={12} color={colors.primary} /> : null}
+                  <AppText size="xs" weight={600} color={colors.primary}>
+                    {loadingEarlier ? "Loading…" : "Load earlier messages"}
+                  </AppText>
+                </Pressable>
+              ) : null
+            }
+            ListEmptyComponent={
               <View style={{ alignItems: "center", padding: 24, gap: 6 }}>
                 <AppText size="sm" weight={600}>
                   Say hello
@@ -240,8 +280,8 @@ export default function Chat() {
                   This is the ride's group chat — coordinate pickup, timing and the fare split here.
                 </AppText>
               </View>
-            ) : null}
-          </ScrollView>
+            }
+          />
         )}
       </Screen>
 
@@ -284,7 +324,7 @@ export default function Chat() {
             disabled={!text.trim() || sending}
             style={{ height: 44, width: 44, borderRadius: 16, backgroundColor: text.trim() ? colors.primary : colors.muted }}
           >
-            <Send size={18} color={colors.primaryForeground} />
+            {sending ? <Loader2 size={18} color={colors.primaryForeground} /> : <Send size={18} color={colors.primaryForeground} />}
           </IconButton>
         </View>
       ) : chat && locked ? (

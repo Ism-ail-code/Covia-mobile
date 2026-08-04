@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { adminCancelRide, adminGetRideDetails, adminGetRideTimeline } from "@/services/admin";
 import { can } from "@/types/admin";
 import type { AdminRideDetails, AdminTimelineEvent } from "@/types/admin";
+import { naira } from "@/lib/format";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -106,8 +107,6 @@ export default function AdminRideDetail() {
   );
 
   const cancellable = ride && !["cancelled", "completed", "expired"].includes(ride.ride_status);
-
-  const naira = (n: number) => `₦${n.toLocaleString()}`;
 
   return (
     <PhoneShell>

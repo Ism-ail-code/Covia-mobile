@@ -403,27 +403,6 @@ export async function flushPendingLocations(): Promise<number> {
 
 // ── Route + monitoring controls (host) ────────────────────────────────
 
-export async function setPlannedRoute(rideId: string, points: SafetyLocation[]): Promise<void> {
-  requireConfigured();
-  const { error } = await supabase.rpc("set_planned_route", {
-    p_ride_id: rideId,
-    p_points: points,
-  });
-  if (error) throw toSafetyError(error);
-}
-
-export async function suspendRideMonitoring(rideId: string): Promise<void> {
-  requireConfigured();
-  const { error } = await supabase.rpc("suspend_ride_monitoring", { p_ride_id: rideId });
-  if (error) throw toSafetyError(error);
-}
-
-export async function resumeRideMonitoring(rideId: string): Promise<void> {
-  requireConfigured();
-  const { error } = await supabase.rpc("resume_ride_monitoring", { p_ride_id: rideId });
-  if (error) throw toSafetyError(error);
-}
-
 export async function reportSafetyIncident(rideId: string, note: string): Promise<SafetyEvent> {
   requireConfigured();
   const { data, error } = await supabase.rpc("report_safety_incident", {

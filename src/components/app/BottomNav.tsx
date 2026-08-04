@@ -78,6 +78,9 @@ export function BottomNav({ state, navigation, style }: Props) {
             <Pressable
               key={route}
               onPress={() => navigation.navigate(route)}
+              accessibilityLabel={label}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
               style={({ pressed }) => [
                 {
                   minWidth: 64,

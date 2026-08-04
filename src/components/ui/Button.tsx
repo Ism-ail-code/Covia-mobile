@@ -29,10 +29,10 @@ const variantStyles: Record<Variant, { bg?: string; border?: string; fg: string 
 };
 
 const sizeStyles: Record<Size, ViewStyle> = {
-  default: { height: 36, paddingHorizontal: 16, borderRadius: radius.md },
-  sm: { height: 32, paddingHorizontal: 12, borderRadius: radius.md },
-  lg: { height: 40, paddingHorizontal: 32, borderRadius: radius.md },
-  icon: { height: 36, width: 36, borderRadius: radius.md },
+  default: { height: 44, paddingHorizontal: 16, borderRadius: radius.md },
+  sm: { height: 36, paddingHorizontal: 12, borderRadius: radius.md },
+  lg: { height: 48, paddingHorizontal: 32, borderRadius: radius.md },
+  icon: { height: 44, width: 44, borderRadius: radius.md },
 };
 
 export function Button({
@@ -89,7 +89,7 @@ export function Button({
 /** Round icon affordance used in top bars and bottom action rows. */
 export function IconButton({
   variant = "secondary",
-  size = 40,
+  size = 44,
   radius: r = radius.full,
   style,
   children,

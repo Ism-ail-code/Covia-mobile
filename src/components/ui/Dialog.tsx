@@ -31,7 +31,7 @@ export function Dialog({ visible, onClose, title, children, style }: Props) {
   const overlayStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} accessibilityViewIsModal>
       <Animated.View
         style={[{ flex: 1, backgroundColor: colors.overlay, justifyContent: "center", alignItems: "center", padding: 28 }, overlayStyle]}
       >
