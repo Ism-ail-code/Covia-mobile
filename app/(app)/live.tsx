@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { ScrollView, View, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { MessageCircle, ShieldAlert, Navigation, RefreshCw } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
@@ -16,6 +16,8 @@ import { useToast } from "@/components/ui/Toast";
 import { getRideHistory, getRideParticipants, getRideTimeline } from "@/services/rides";
 import type { RideHistoryEntry, RideParticipant, RideTimelineEvent } from "@/types/ride";
 
+const REFRESH_INTERVAL = 15000; // 15 seconds
+
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -26,10 +28,36 @@ export default function LiveRide() {
   const [participants, setParticipants] = useState<RideParticipant[]>([]);
   const [timeline, setTimeline] = useState<RideTimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const rideIdRef = useRef<string | null>(null);
+
+  const loadData = useCallback(async (rideId: string, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const [members, events] = await Promise.all([
+        getRideParticipants(rideId).catch(() => [] as RideParticipant[]),
+        getRideTimeline(rideId).catch(() => [] as RideTimelineEvent[]),
+      ]);
+      if (!mountedRef.current) return;
+      setParticipants(members);
+      setTimeline(events);
+    } catch {
+      // Silently handle errors on refresh
+    } finally {
+      if (mountedRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
     (async () => {
       try {
         const history = await getRideHistory(null, null, 1, 20);
@@ -40,6 +68,7 @@ export default function LiveRide() {
           return;
         }
         setEntry(active);
+        rideIdRef.current = active.rideId;
         const [members, events] = await Promise.all([
           getRideParticipants(active.rideId).catch(() => [] as RideParticipant[]),
           getRideTimeline(active.rideId).catch(() => [] as RideTimelineEvent[]),
@@ -47,16 +76,33 @@ export default function LiveRide() {
         if (cancelled) return;
         setParticipants(members);
         setTimeline(events);
+        setLoading(false);
+
+        // Start polling for updates
+        intervalId = setInterval(() => {
+          if (rideIdRef.current && mountedRef.current) {
+            void loadData(rideIdRef.current);
+          }
+        }, REFRESH_INTERVAL);
       } catch (e) {
         if (!cancelled) setError((e as Error).message || "Couldn't load the live ride.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
+      mountedRef.current = false;
+      if (intervalId) clearInterval(intervalId);
     };
-  }, []);
+  }, [loadData]);
+
+  const onRefresh = useCallback(() => {
+    if (rideIdRef.current) {
+      void loadData(rideIdRef.current, true);
+    }
+  }, [loadData]);
 
   if (loading) {
     return (
@@ -96,6 +142,10 @@ export default function LiveRide() {
   }
 
   const onBoard = participants.filter((p) => !p.leftAt);
+  const departureMs = new Date(entry.departureTime).getTime();
+  const nowMs = Date.now();
+  const etaMinutes = Math.max(0, Math.round((departureMs - nowMs) / 60000));
+  const etaDisplay = etaMinutes > 60 ? `${Math.floor(etaMinutes / 60)}h ${etaMinutes % 60}m` : `${etaMinutes} min`;
   const progressed = Math.min(
     100,
     Math.round((timeline.length / Math.max(9, timeline.length + 3)) * 100),
@@ -105,8 +155,12 @@ export default function LiveRide() {
     <PhoneShell>
       <TopBar title="Live ride" subtitle={entry.destination} back onBack={() => router.back()} />
       <Screen>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 112, gap: 16 }}>
-          <MapPlaceholder height={256} eta="12 min" label="En route" />
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 112, gap: 16 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <MapPlaceholder height={256} eta={etaDisplay} label="En route" />
 
           <View style={{ paddingHorizontal: 20, gap: 16 }}>
             <View style={[styles.card]}>
