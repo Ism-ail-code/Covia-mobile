@@ -74,8 +74,10 @@ function formatBytes(bytes: number): string {
 export default function VerificationScreen() {
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const isFlowStep = from === "flow";
-  const { user, refreshProfile, setOnboardingStep } = useAuth();
+  const { user, refreshProfile, setOnboardingStep, onboardingStep } = useAuth();
+  // Flow mode = the user is mid-onboarding (resumed or arrived from
+  // create-profile); normal mode = they're in the app and editing.
+  const isFlowStep = from === "flow" || onboardingStep === "verify";
 
   const [activeType, setActiveType] = useState<VerificationType>("government_id");
   const [submissions, setSubmissions] = useState<
