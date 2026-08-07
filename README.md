@@ -38,6 +38,7 @@ Without real Supabase keys the app still boots; auth screens show a friendly
 | ------------------------------- | -------------------------------- | --------------- |
 | `EXPO_PUBLIC_SUPABASE_URL`      | Supabase project URL             | Yes (public)    |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (RLS-protected)| Yes (public)    |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google "Web" OAuth client ID (Google Sign-In) | Yes (public) |
 
 `.env` is git-ignored; only `.env.example` is committed.
 
@@ -60,12 +61,20 @@ src/
 └── theme/               design tokens (colors, radius, shadows)
 ```
 
-## Auth flow (Phase 2)
+## Auth flow (Phases 2 + 10)
 
 - **Register** → creates the Supabase auth user + `profiles` row (DB trigger)
-  → confirmation email → deep link back into the app (`covia://verify`).
+  → **6-digit email OTP** (typed inside the app, no email round-trip) →
+  profile setup. Email OTP is Supabase's official OTP flow
+  (`signInWithOtp` + `verifyOtp({ type: "email" })`); the Magic Link email
+  template must render `{{ .Token }}` (see `docs/GOOGLE_SIGNIN_SETUP.md`).
+- **Google Sign-In** (native) → `@react-native-google-signin/google-signin`
+  + `supabase.auth.signInWithIdToken`; new accounts get a profile row
+  automatically (DB trigger); existing email accounts with the same address
+  are linked by Supabase. See `docs/GOOGLE_SIGNIN_SETUP.md` for the console
+  + dashboard setup (requires a native rebuild).
 - **Login** → session persisted in AsyncStorage, restored on restart, access
-  token auto-refreshed; unverified accounts are directed to the verify screen.
+  token auto-refreshed; unverified accounts are directed to the OTP screen.
 - **Logout** → session cleared; protected routes redirect to the welcome
   screen via `Stack.Protected`.
 - **Forgot password** → reset email (`covia://reset`) → new password.
