@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Camera } from "lucide-react-native";
 import { colors, gradientBrandEnd, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
@@ -24,9 +24,11 @@ import { GENDERS, type Gender } from "@/types/profile";
 export default function CreateProfile() {
   const router = useRouter();
   const toast = useToast();
-  const { from } = useLocalSearchParams<{ from?: string }>();
-  const isSignupStep = from === "signup";
-  const { profile, user, updateProfilePatch, busy } = useAuth();
+  const { profile, user, updateProfilePatch, setOnboardingStep, busy } = useAuth();
+  // Flow mode is driven by the persisted onboarding step, not a route
+  // param — so reinstalls and app restarts resume exactly where they
+  // left off (migration 0044).
+  const isSignupStep = profile?.onboardingStep === "profile";
   const [displayName, setDisplayName] = useState(
     profile?.displayName ?? user?.user_metadata?.full_name ?? "",
   );
@@ -112,8 +114,13 @@ export default function CreateProfile() {
         country: country.trim() || null,
         bio: bio.trim() || null,
       });
-      router.replace("/home");
-    } catch (err) {
+      if (isSignupStep) {
+        // Onboarding lifecycle: profile done → identity verification intro.
+        await setOnboardingStep("verify");
+        router.replace({ pathname: "/verification", params: { from: "flow" } });
+      } else {
+        router.replace("/home");
+      }    } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (message.includes("taken") || message.includes("reserved")) {
         setError(message);
@@ -129,7 +136,7 @@ export default function CreateProfile() {
     <PhoneShell>
       <TopBar
         title={isSignupStep ? "Create your profile" : "Edit profile"}
-        subtitle={isSignupStep ? "Step 3 of 3 — About you" : "About you"}
+        subtitle={isSignupStep ? "Step 2 of 3 — About you" : "About you"}
         back
       />
       {isSignupStep ? (

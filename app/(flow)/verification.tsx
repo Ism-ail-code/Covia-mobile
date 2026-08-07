@@ -8,15 +8,20 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import {
   BadgeCheck,
-  GraduationCap,
-  Upload,
+  Camera,
   Clock3,
   CheckCircle2,
+  GraduationCap,
+  Image as ImageIcon,
+  ShieldCheck,
+  Trash2,
+  Upload,
   XCircle,
+  type LucideIcon,
 } from "lucide-react-native";
 import { colors, radius, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
@@ -26,8 +31,9 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { StatusBanner } from "@/components/app/EmptyState";
 import { Progress } from "@/components/ui/Progress";
-import { ScaleIn } from "@/components/ui/animations";
+import { ScaleIn, Stagger } from "@/components/ui/animations";
 import { Input } from "@/components/ui/Input";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useAuth } from "@/context/AuthContext";
 import {
   GOVERNMENT_ID_KINDS,
@@ -44,12 +50,32 @@ import {
   validateVerificationDocument,
   type DocumentSource,
 } from "@/services/verification";
+import { maybeCompressDocument, shouldCompress } from "@/services/imageCompression";
 
 type DocSlot = "front" | "back" | "selfie" | "card";
 
+type PickPhase = {
+  label: string;
+  fraction: number;
+};
+
+const PICK_PHASES: PickPhase[] = [
+  { label: "Preparing images…", fraction: 0.15 },
+  { label: "Uploading documents…", fraction: 0.55 },
+  { label: "Submitting verification…", fraction: 0.92 },
+];
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function VerificationScreen() {
   const router = useRouter();
-  const { user, refreshProfile } = useAuth();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFlowStep = from === "flow";
+  const { user, refreshProfile, setOnboardingStep } = useAuth();
 
   const [activeType, setActiveType] = useState<VerificationType>("government_id");
   const [submissions, setSubmissions] = useState<
@@ -57,11 +83,14 @@ export default function VerificationScreen() {
   >({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [phase, setPhase] = useState<PickPhase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [govKind, setGovKind] = useState<GovernmentIdKind>("national_id");
-  const [studentMethod, setStudentMethod] = useState<"email" | "card">("card");
+  const [studentMethod, setStudentMethod] = useState<"card" | "email">("card");
   const [universityEmail, setUniversityEmail] = useState("");
   const [picks, setPicks] = useState<Partial<Record<DocSlot, DocumentSource>>>({});
+  const [sheetSlot, setSheetSlot] = useState<DocSlot | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
@@ -98,33 +127,57 @@ export default function VerificationScreen() {
     }, [load]),
   );
 
-  const pickDocument = async (slot: DocSlot) => {
-    setError(null);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError("Allow photo access to upload documents.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    const validationError = validateVerificationDocument(asset);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setPicks((prev) => ({
-      ...prev,
-      [slot]: {
-        uri: asset.uri,
-        fileName: asset.fileName,
-        mimeType: asset.mimeType,
-        fileSize: asset.fileSize,
-      },
-    }));
+  const openPicker = (slot: DocSlot, source: "camera" | "library") => {
+    setSheetSlot(null);
+    void (async () => {
+      const permission =
+        source === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError(
+          source === "camera"
+            ? "Allow camera access to take a document photo."
+            : "Allow photo access to upload documents.",
+        );
+        return;
+      }
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.9 })
+          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      const validationError = validateVerificationDocument(asset);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      // Camera photos are large — compress right away so the preview and
+      // the eventual upload both work on the small file.
+      setCompressing(true);
+      try {
+        const processed = await maybeCompressDocument({
+          uri: asset.uri,
+          fileName: asset.fileName,
+          mimeType: asset.mimeType,
+          fileSize: asset.fileSize,
+        });
+        setPicks((prev) => ({ ...prev, [slot]: processed }));
+      } catch {
+        setPicks((prev) => ({
+          ...prev,
+          [slot]: {
+            uri: asset.uri,
+            fileName: asset.fileName,
+            mimeType: asset.mimeType,
+            fileSize: asset.fileSize,
+          },
+        }));
+      } finally {
+        setCompressing(false);
+      }
+    })();
   };
 
   const removePick = (slot: DocSlot) => {
@@ -140,39 +193,72 @@ export default function VerificationScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      if (activeType === "government_id") {
-        if (!picks.front) throw new Error("Add a photo of the front of your ID.");
-        const front = await uploadVerificationDocument(user.id, "front", picks.front);
-        const back = picks.back ? await uploadVerificationDocument(user.id, "back", picks.back) : null;
-        const selfie = picks.selfie ? await uploadVerificationDocument(user.id, "selfie", picks.selfie) : null;
+      const isGov = activeType === "government_id";
+      const slots: DocSlot[] = isGov
+        ? ["front", ...(picks.back ? (["back"] as DocSlot[]) : []), ...(picks.selfie ? (["selfie"] as DocSlot[]) : [])]
+        : ["card"];
+
+      // 1 — Prepare (compress) every picked document.
+      setPhase(PICK_PHASES[0]);
+      const prepared: Partial<Record<DocSlot, DocumentSource>> = {};
+      for (const slot of slots) {
+        const pick = picks[slot];
+        if (!pick) continue;
+        prepared[slot] = await maybeCompressDocument(pick);
+      }
+
+      // 2 — Upload each document.
+      setPhase(PICK_PHASES[1]);
+      const paths: Partial<Record<DocSlot, string>> = {};
+      const slotKey: Record<string, "front" | "back" | "selfie" | "student_card"> = {
+        front: "front",
+        back: "back",
+        selfie: "selfie",
+        card: "student_card",
+      };
+      for (const slot of slots) {
+        const doc = prepared[slot];
+        if (!doc) continue;
+        paths[slot] = await uploadVerificationDocument(user.id, slotKey[slot], doc);
+      }
+
+      // 3 — Submit.
+      setPhase(PICK_PHASES[2]);
+      if (isGov) {
         const current = submissions.government_id;
         const isResubmit =
-          current && (current.status === "rejected" || current.status === "resubmission_requested" || current.status === "expired");
+          current &&
+          (current.status === "rejected" ||
+            current.status === "resubmission_requested" ||
+            current.status === "expired");
         const submission = isResubmit
           ? await resubmitVerification(current.id, {
               type: "government_id",
-              front,
-              back,
-              selfie,
+              front: paths.front ?? null,
+              back: paths.back ?? null,
+              selfie: paths.selfie ?? null,
               governmentIdKind: govKind,
             })
           : await submitVerification({
               type: "government_id",
-              front,
-              back,
-              selfie,
+              front: paths.front ?? null,
+              back: paths.back ?? null,
+              selfie: paths.selfie ?? null,
               governmentIdKind: govKind,
             });
         setSubmissions((prev) => ({ ...prev, government_id: submission }));
       } else {
         const current = submissions.student;
         const isResubmit =
-          current && (current.status === "rejected" || current.status === "resubmission_requested" || current.status === "expired");
+          current &&
+          (current.status === "rejected" ||
+            current.status === "resubmission_requested" ||
+            current.status === "expired");
         let card: string | null = null;
         let email: string | null = null;
         if (studentMethod === "card") {
           if (!picks.card) throw new Error("Upload a photo of your student ID card.");
-          card = await uploadVerificationDocument(user.id, "student_card", picks.card);
+          card = paths.card ?? null;
         } else {
           if (!universityEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(universityEmail.trim())) {
             throw new Error("Enter a valid university email.");
@@ -194,6 +280,7 @@ export default function VerificationScreen() {
       }
       setPicks({});
       setUniversityEmail("");
+      setPhase(null);
       void refreshProfile();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong — please try again.");
@@ -202,28 +289,40 @@ export default function VerificationScreen() {
     }
   };
 
+  const finishFlow = async () => {
+    try {
+      await setOnboardingStep("complete");
+    } catch {
+      // The local profile stays on 'verify' — the guard will send the
+      // user back here next launch; not fatal.
+    }
+    router.replace("/home");
+  };
+
   const current = submissions[activeType];
-  const needsUpload = !current || current.status === "rejected" || current.status === "expired" || current.status === "resubmission_requested";
-  const canSubmit = activeType === "government_id"
-    ? Boolean(picks.front)
-    : studentMethod === "card"
-      ? Boolean(picks.card)
-      : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(universityEmail.trim());
+  const needsUpload =
+    !current ||
+    current.status === "rejected" ||
+    current.status === "expired" ||
+    current.status === "resubmission_requested";
+  const canSubmit =
+    activeType === "government_id"
+      ? Boolean(picks.front)
+      : studentMethod === "card"
+        ? Boolean(picks.card)
+        : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(universityEmail.trim());
 
   const typeMeta = VERIFICATION_TYPES.find((t) => t.value === activeType)!;
   const TypeIcon = activeType === "government_id" ? BadgeCheck : GraduationCap;
 
   return (
     <PhoneShell>
-      <TopBar title="Verification" subtitle="Build trust with your Covians" back onBack={() => router.back()} />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12, gap: 8 }}>
-        {VERIFICATION_TYPES.map((t) => (
-          <Chip key={t.value} active={activeType === t.value} onPress={() => setActiveType(t.value)}>
-            {t.label}
-          </Chip>
-        ))}
-      </ScrollView>
+      <TopBar
+        title="Identity verification"
+        subtitle="Build trust with your Covians"
+        back
+        onBack={() => router.back()}
+      />
 
       <Screen>
         <ScrollView
@@ -237,6 +336,8 @@ export default function VerificationScreen() {
             </View>
           ) : (
             <>
+              {isFlowStep ? <IntroCard onSkip={finishFlow} /> : null}
+
               {error ? (
                 <>
                   <StatusBanner
@@ -245,13 +346,23 @@ export default function VerificationScreen() {
                     title={error}
                   />
                   <Button variant="outline" style={{ height: 44, borderRadius: radius.lg }} onPress={load}>
-                    <AppText size="sm" weight={600} color={colors.primary}>Try again</AppText>
+                    <AppText size="sm" weight={600} color={colors.primary}>
+                      Try again
+                    </AppText>
                   </Button>
                 </>
               ) : null}
 
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {VERIFICATION_TYPES.map((t) => (
+                  <Chip key={t.value} active={activeType === t.value} onPress={() => setActiveType(t.value)}>
+                    {t.label}
+                  </Chip>
+                ))}
+              </ScrollView>
+
               {needsUpload ? (
-                <>
+                <Stagger>
                   {current?.status === "rejected" || current?.status === "resubmission_requested" ? (
                     <StatusBanner
                       tone="danger"
@@ -270,18 +381,11 @@ export default function VerificationScreen() {
                       title="Your previous verification expired"
                       body="Submit again with up-to-date documents."
                     />
-                  ) : (
-                    <StatusBanner
-                      tone="info"
-                      icon={<TypeIcon size={16} color={colors.primary} />}
-                      title="Verified travellers get 4x more approvals"
-                      body="Your documents are only used for identity checks and are never shown to other users."
-                    />
-                  )}
+                  ) : null}
 
                   <View style={styles.card}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                      <View style={{ height: 40, width: 40, borderRadius: radius.xl, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+                      <View style={styles.iconBox}>
                         <TypeIcon size={20} color={colors.primary} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
@@ -312,7 +416,8 @@ export default function VerificationScreen() {
                           label="Front of your ID"
                           required
                           picked={picks.front}
-                          onPress={() => void pickDocument("front")}
+                          compressing={compressing}
+                          onPick={() => setSheetSlot("front")}
                           onRemove={() => removePick("front")}
                           style={{ marginTop: 16 }}
                         />
@@ -320,7 +425,8 @@ export default function VerificationScreen() {
                           label="Back of your ID"
                           optional
                           picked={picks.back}
-                          onPress={() => void pickDocument("back")}
+                          compressing={compressing}
+                          onPick={() => setSheetSlot("back")}
                           onRemove={() => removePick("back")}
                           style={{ marginTop: 12 }}
                         />
@@ -328,7 +434,8 @@ export default function VerificationScreen() {
                           label="Selfie"
                           optional
                           picked={picks.selfie}
-                          onPress={() => void pickDocument("selfie")}
+                          compressing={compressing}
+                          onPick={() => setSheetSlot("selfie")}
                           onRemove={() => removePick("selfie")}
                           style={{ marginTop: 12 }}
                         />
@@ -348,7 +455,8 @@ export default function VerificationScreen() {
                             label="Student ID card"
                             required
                             picked={picks.card}
-                            onPress={() => void pickDocument("card")}
+                            compressing={compressing}
+                            onPick={() => setSheetSlot("card")}
                             onRemove={() => removePick("card")}
                             style={{ marginTop: 16 }}
                           />
@@ -371,6 +479,15 @@ export default function VerificationScreen() {
                     )}
                   </View>
 
+                  {phase && submitting ? (
+                    <View style={styles.card}>
+                      <AppText size="xs" weight={600} color={colors.mutedForeground}>
+                        {phase.label}
+                      </AppText>
+                      <Progress value={phase.fraction * 100} style={{ marginTop: 10, height: 6 }} />
+                    </View>
+                  ) : null}
+
                   <Button
                     block
                     disabled={submitting || !canSubmit}
@@ -387,7 +504,15 @@ export default function VerificationScreen() {
                       </AppText>
                     )}
                   </Button>
-                </>
+
+                  {isFlowStep ? (
+                    <Button variant="ghost" style={{ height: 44 }} onPress={finishFlow}>
+                      <AppText size="sm" color={colors.mutedForeground}>
+                        I'll verify later
+                      </AppText>
+                    </Button>
+                  ) : null}
+                </Stagger>
               ) : null}
 
               {current?.status === "pending" ? (
@@ -410,9 +535,13 @@ export default function VerificationScreen() {
                     title="You're verified"
                     body="Your ID badge is now visible on your profile and every ride you host or join."
                     extra={
-                      <Button block style={{ marginTop: 24, height: 48, borderRadius: 16 }} onPress={() => router.navigate("/home")}>
+                      <Button
+                        block
+                        style={{ marginTop: 24, height: 48, borderRadius: 16 }}
+                        onPress={() => (isFlowStep ? void finishFlow() : router.back())}
+                      >
                         <AppText size="sm" weight={600} color={colors.primaryForeground}>
-                          Go to home
+                          {isFlowStep ? "Go to home" : "Done"}
                         </AppText>
                       </Button>
                     }
@@ -423,7 +552,125 @@ export default function VerificationScreen() {
           )}
         </ScrollView>
       </Screen>
+
+      <BottomSheet
+        visible={sheetSlot !== null}
+        onClose={() => setSheetSlot(null)}
+        title="Add document photo"
+      >
+        <SheetOption
+          icon={Camera}
+          label="Take a photo"
+          caption="Use your camera for the sharpest scan"
+          onPress={() => sheetSlot && openPicker(sheetSlot, "camera")}
+        />
+        <SheetOption
+          icon={ImageIcon}
+          label="Choose from library"
+          caption="Pick an existing image"
+          onPress={() => sheetSlot && openPicker(sheetSlot, "library")}
+        />
+        <Pressable
+          onPress={() => setSheetSlot(null)}
+          style={{ height: 48, alignItems: "center", justifyContent: "center", marginTop: 4 }}
+        >
+          <AppText size="sm" weight={600} color={colors.destructive}>
+            Cancel
+          </AppText>
+        </Pressable>
+      </BottomSheet>
     </PhoneShell>
+  );
+}
+
+/** Why verification matters — shown only during the onboarding step. */
+function IntroCard({ onSkip }: { onSkip: () => void }) {
+  const rows: { icon: LucideIcon; title: string; body: string }[] = [
+    {
+      icon: ShieldCheck,
+      title: "Everyone is checked",
+      body: "Every Covian verifies who they are. You'll see the same badge on other people's profiles.",
+    },
+    {
+      icon: BadgeCheck,
+      title: "Accepted documents",
+      body: "National ID, driver's licence or passport. Students can also use a university email.",
+    },
+    {
+      icon: Clock3,
+      title: "Reviewed within 4 hours",
+      body: "Your documents are used for the identity check only — never shown to other users.",
+    },
+  ];
+  return (
+    <View style={[styles.card, { backgroundColor: colors.primarySoft, borderColor: colors.primarySoft }]}>
+      <AppText family="display" size="lg" weight={700}>
+        One quick check
+      </AppText>
+      <AppText size="sm" color={colors.mutedForeground} style={{ marginTop: 4 }}>
+        Identity verification is the last step before you can host and join rides.
+      </AppText>
+      <View style={{ marginTop: 16, gap: 12 }}>
+        {rows.map((row, i) => {
+          const Icon = row.icon;
+          return (
+            <View key={i} style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
+              <View style={[styles.iconBox, { width: 34, height: 34, borderRadius: 12 }]}>
+                <Icon size={16} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText size="sm" weight={600}>
+                  {row.title}
+                </AppText>
+                <AppText size="xs" color={colors.mutedForeground} style={{ marginTop: 2, lineHeight: 18 }}>
+                  {row.body}
+                </AppText>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function SheetOption({
+  icon: Icon,
+  label,
+  caption,
+  onPress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  caption: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+          paddingHorizontal: 20,
+          paddingVertical: 12,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <View style={[styles.iconBox, { width: 40, height: 40, borderRadius: 14 }]}>
+        <Icon size={18} color={colors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <AppText size="sm" weight={600}>
+          {label}
+        </AppText>
+        <AppText size="xs" color={colors.mutedForeground}>
+          {caption}
+        </AppText>
+      </View>
+    </Pressable>
   );
 }
 
@@ -432,7 +679,8 @@ function UploadTile({
   required,
   optional,
   picked,
-  onPress,
+  compressing,
+  onPick,
   onRemove,
   style,
 }: {
@@ -440,17 +688,20 @@ function UploadTile({
   required?: boolean;
   optional?: boolean;
   picked?: DocumentSource;
-  onPress: () => void;
+  compressing?: boolean;
+  onPick: () => void;
   onRemove: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
     <View style={style}>
-      <AppText size="xs" weight={600} color={colors.mutedForeground}>
-        {label}
-        {optional ? " (optional)" : ""}
-        {required ? " *" : ""}
-      </AppText>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <AppText size="xs" weight={600} color={colors.mutedForeground}>
+          {label}
+          {optional ? " (optional)" : ""}
+          {required ? " *" : ""}
+        </AppText>
+      </View>
       {picked ? (
         <View
           style={{
@@ -461,21 +712,37 @@ function UploadTile({
             borderRadius: 16,
             borderWidth: 1,
             borderColor: colors.border,
-            backgroundColor: colors.secondary,
+            backgroundColor: colors.card,
             padding: 10,
           }}
         >
-          <Image source={{ uri: picked.uri }} style={{ height: 40, width: 40, borderRadius: 10 }} />
-          <AppText size="xs" numberOfLines={1} style={{ flex: 1 }}>
-            {picked.fileName || label}
-          </AppText>
-          <Pressable onPress={onRemove} hitSlop={8}>
-            <XCircle size={16} color={colors.mutedForeground} />
+          <Image source={{ uri: picked.uri }} style={{ height: 56, width: 56, borderRadius: 12 }} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText size="xs" numberOfLines={1} weight={600}>
+              {picked.fileName || label}
+            </AppText>
+            <AppText size="xs" color={colors.mutedForeground}>
+              {picked.fileSize != null ? formatBytes(picked.fileSize) : "Ready"}
+              {shouldCompress(picked) ? " · will compress" : ""}
+            </AppText>
+          </View>
+          <Pressable
+            onPress={onPick}
+            hitSlop={8}
+            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: colors.secondary }}
+          >
+            <AppText size="xs" weight={600} color={colors.primary}>
+              Replace
+            </AppText>
+          </Pressable>
+          <Pressable onPress={onRemove} hitSlop={8} style={{ padding: 4 }}>
+            <Trash2 size={16} color={colors.destructive} />
           </Pressable>
         </View>
       ) : (
         <Pressable
-          onPress={onPress}
+          onPress={onPick}
+          disabled={compressing}
           style={{
             marginTop: 8,
             alignItems: "center",
@@ -486,12 +753,22 @@ function UploadTile({
             borderColor: colors.border,
             backgroundColor: `${colors.secondary}99`,
             paddingVertical: 24,
+            opacity: compressing ? 0.6 : 1,
           }}
         >
-          <Upload size={20} color={colors.mutedForeground} />
-          <AppText size="xs" weight={500} color={colors.mutedForeground}>
-            Tap to upload
-          </AppText>
+          {compressing ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <>
+              <Upload size={20} color={colors.mutedForeground} />
+              <AppText size="xs" weight={500} color={colors.mutedForeground}>
+                Tap to add
+              </AppText>
+              <AppText size="xs" color={colors.mutedForeground}>
+                Camera or library · JPEG, PNG, WebP
+              </AppText>
+            </>
+          )}
         </Pressable>
       )}
     </View>
@@ -541,5 +818,12 @@ const styles = {
     padding: 16,
     ...shadows.soft,
   },
+  iconBox: {
+    height: 40,
+    width: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
 };
-

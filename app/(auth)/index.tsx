@@ -10,13 +10,14 @@ import { GoogleButton } from "@/components/ui/GoogleButton";
 import { OrDivider } from "@/components/ui/OrDivider";
 import { Button } from "@/components/ui/Button";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
+import { homeRouteForStep } from "@/lib/onboarding";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 
 export default function Welcome() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, onboardingStep } = useAuth();
   const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,9 +25,9 @@ export default function Welcome() {
     setError(null);
     setGoogleBusy(true);
     try {
-      const { cancelled, needsProfile } = await signInWithGoogle();
+      const { cancelled } = await signInWithGoogle();
       if (cancelled) return;
-      router.replace(needsProfile ? "/create-profile" : "/home");
+      router.replace(homeRouteForStep(onboardingStep));
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {

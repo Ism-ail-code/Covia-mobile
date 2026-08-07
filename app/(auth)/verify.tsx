@@ -12,6 +12,7 @@ import { OtpInput } from "@/components/ui/OtpInput";
 import { StatusBanner } from "@/components/app/EmptyState";
 import { ScaleIn } from "@/components/ui/animations";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
+import { homeRouteForStep } from "@/lib/onboarding";
 import { LinearGradient } from "expo-linear-gradient";
 
 const RESEND_COOLDOWN = 60;
@@ -33,7 +34,7 @@ function formatCountdown(seconds: number) {
 export default function Verify() {
   const router = useRouter();
   const { email: emailParam, from } = useLocalSearchParams<{ email?: string; from?: string }>();
-  const { user, emailVerified, sendOtp, verifyOtpEmail, busy } = useAuth();
+  const { profile, user, emailVerified, sendOtp, verifyOtpEmail, busy } = useAuth();
   const [code, setCode] = useState("");
   const [phase, setPhase] = useState<"idle" | "verifying" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export default function Verify() {
   // exchanged, the session becomes verified and we continue from here.
   useEffect(() => {
     if (emailVerified) {
-      router.replace(from === "signup" ? "/create-profile" : "/home");
+      router.replace(from === "signup" ? "/onboard" : "/home");
     }
   }, [emailVerified, router, from]);
 
@@ -93,7 +94,11 @@ export default function Verify() {
       await verifyOtpEmail(email, token);
       setPhase("success");
       setTimeout(() => {
-        router.replace(from === "signup" ? "/create-profile" : "/home");
+        // Fresh signups start the onboarding lifecycle at /onboard; everyone
+        // else resumes wherever their profile row says they left off.
+        router.replace(
+          from === "signup" ? "/onboard" : homeRouteForStep(profile?.onboardingStep ?? "complete"),
+        );
       }, 1100);
     } catch (err) {
       setError(authErrorMessage(err));

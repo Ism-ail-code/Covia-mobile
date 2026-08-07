@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/Progress";
 import { RiseIn } from "@/components/ui/animations";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
 import { isValidEmail, validatePassword, validatePhone } from "@/lib/validation";
+import { homeRouteForStep } from "@/lib/onboarding";
 
 const fields: Array<{
   id: string;
@@ -45,7 +46,7 @@ const fields: Array<{
 
 export default function Register() {
   const router = useRouter();
-  const { signUp, signInWithGoogle, busy } = useAuth();
+  const { signUp, signInWithGoogle, busy, onboardingStep } = useAuth();
   const [values, setValues] = useState<Record<string, string>>({});
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +59,9 @@ export default function Register() {
     setError(null);
     setGoogleBusy(true);
     try {
-      const { cancelled, needsProfile } = await signInWithGoogle();
+      const { cancelled } = await signInWithGoogle();
       if (cancelled) return;
-      router.replace(needsProfile ? "/create-profile" : "/home");
+      router.replace(homeRouteForStep(onboardingStep));
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {
@@ -106,8 +107,8 @@ export default function Register() {
         phone,
       });
       if (sessionCreated) {
-        // Confirmation is off — jump straight to profile setup (step 3).
-        router.replace({ pathname: "/create-profile", params: { from: "signup" } });
+        // Confirmation is off — start the onboarding lifecycle straight away.
+        router.replace(homeRouteForStep(onboardingStep));
       } else {
         // Email confirmation is enabled — the profile is created via the
         // DB trigger once the account exists; the user verifies by email.

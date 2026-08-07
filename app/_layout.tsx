@@ -19,16 +19,23 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootNavigator() {
-  const { status, emailVerified } = useAuth();
+  const { status, emailVerified, stepReady, onboardingStep } = useAuth();
 
   // While the persisted session is being restored, keep the splash visible.
   useEffect(() => {
     if (status !== "loading") SplashScreen.hideAsync().catch(() => {});
   }, [status]);
 
-  if (status === "loading") return null;
+  // Never flash the main app before the onboarding step has been read.
+  if (status === "loading" || (status === "authenticated" && !stepReady)) {
+    return null;
+  }
 
   const canAccessApp = status === "authenticated" && emailVerified;
+
+  // The setup journey (onboarding → profile → verification intro) is its
+  // own protected group so unfinished onboarding can never be skipped.
+  const inSetup = canAccessApp && onboardingStep !== "complete";
 
   return (
     <Stack
@@ -38,10 +45,13 @@ function RootNavigator() {
         animation: "slide_from_right",
       }}
     >
-      <Stack.Protected guard={canAccessApp}>
+      <Stack.Protected guard={canAccessApp && !inSetup}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(app)" />
         <Stack.Screen name="admin" />
+      </Stack.Protected>
+      <Stack.Protected guard={canAccessApp && inSetup}>
+        <Stack.Screen name="(flow)" />
       </Stack.Protected>
       <Stack.Screen name="(auth)" />
     </Stack>

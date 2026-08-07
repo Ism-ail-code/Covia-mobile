@@ -189,3 +189,40 @@ except the two fixes listed at the end.
    immediately (`app/(auth)/verify.tsx`).
 3. Outdated "confirmation link" copy on the `email_not_confirmed` mapping
    updated to "verification code" (`src/services/authErrors.ts`).
+
+---
+
+## Post-verification onboarding state machine (Phase 11)
+
+The onboarding lifecycle is persisted on `profiles` (migration 0044)
+so reinstalls and app restarts can never bypass or skip a step:
+
+| Step        | Route              | What the user sees                       |
+| ----------- | ------------------ | ---------------------------------------- |
+| `onboard` | `/(flow)/onboard`          | Post-verification welcome screens      |
+| `profile` | `/(flow)/create-profile`   | Profile setup (name, photo, details)   |
+| `verify`  | `/(flow)/verification`     | Identity verification intro + uploads  |
+| `complete`| `/(tabs)/home`             | Normal app                              |
+
+### How it works
+
+* `profiles.onboarding_step` (default `onboard`) +
+  `profiles.onboarding_completed`; existing rows backfilled to
+  `complete` by the migration so current users stay in the app.
+* `AuthContext` exposes `onboardingStep` / `onboardingCompleted` /
+  `stepReady` / `setOnboardingStep`; the profile is loaded before any
+  auth entry point resolves, so post-auth redirects are race-free.
+* `src/lib/onboarding.ts` — `homeRouteForStep(step)` is the ONLY
+  way screens compute post-auth destinations (no hardcoded `/home`).
+* Root `Stack` is a three-way guard: main app groups
+  (`(tabs)`/`(app)`/`admin`) only when `complete`; `(flow)`
+  only while mid-setup; `(auth)` as the fallback.
+* Verification flow mode (`?from=flow`) shows the intro card and the
+  "I'll verify later" / "Go to home" escape hatches, which advance the
+  step to `complete`.
+
+### Resume behaviour
+
+Sign out, kill the app, or reinstall at any point: the next launch
+lands on `homeRouteForStep(profile.onboardingStep)` — exactly where
+the user left off.

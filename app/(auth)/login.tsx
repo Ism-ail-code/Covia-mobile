@@ -19,10 +19,11 @@ import { OrDivider } from "@/components/ui/OrDivider";
 import { RiseIn, Stagger } from "@/components/ui/animations";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
 import { isValidEmail } from "@/lib/validation";
+import { homeRouteForStep } from "@/lib/onboarding";
 
 export default function Login() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, busy } = useAuth();
+  const { signIn, signInWithGoogle, busy, onboardingStep } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,9 +38,9 @@ export default function Login() {
     setError(null);
     setGoogleBusy(true);
     try {
-      const { cancelled, needsProfile } = await signInWithGoogle();
+      const { cancelled } = await signInWithGoogle();
       if (cancelled) return;
-      router.replace(needsProfile ? "/create-profile" : "/home");
+      router.replace(homeRouteForStep(onboardingStep));
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {
@@ -77,7 +78,8 @@ export default function Login() {
         // Unverified account — complete verification with an OTP code.
         router.replace({ pathname: "/verify", params: { email } });
       } else {
-        router.replace("/home");
+        // Resume wherever the user left off (or straight to home).
+        router.replace(homeRouteForStep(onboardingStep));
       }
     } catch (err) {
       failedAttemptsRef.current += 1;
