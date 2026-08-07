@@ -36,12 +36,20 @@ import {
 import type { UserProfile } from "../types/profile";
 import { AuthErrorDisplay, toFriendlyAuthError } from "../services/authErrors";
 import { isAdmin as isAdminRpc, currentAdminRole as currentAdminRoleRpc } from "../services/admin";
+import { signInWithGoogle as googleSignIn } from "../services/googleAuth";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 export type SignUpResult = {
   /** True when a session exists immediately (email confirmation disabled). */
   sessionCreated: boolean;
+};
+
+export type GoogleSignInResult = {
+  /** True when the user dismissed the Google account sheet. */
+  cancelled: boolean;
+  /** True when the signed-in account still needs its profile set up. */
+  needsProfile: boolean;
 };
 
 type AuthContextValue = {
@@ -68,6 +76,7 @@ type AuthContextValue = {
     phone?: string;
   }) => Promise<SignUpResult>;
   signIn: (email: string, password: string) => Promise<User>;
+  signInWithGoogle: () => Promise<GoogleSignInResult>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -263,6 +272,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadProfile]);
 
+  const signInWithGoogle = useCallback(async (): Promise<GoogleSignInResult> => {
+    if (!isSupabaseConfigured) {
+      throw new AuthErrorDisplay(
+        "Authentication is not configured yet. Add your Supabase keys to .env and restart the app.",
+      );
+    }
+    setBusy(true);
+    try {
+      const { cancelled, user } = await googleSignIn();
+      if (cancelled || !user) return { cancelled, needsProfile: false };
+
+      // The auth state event applies the session; load the profile explicitly
+      // so we can decide where the user should land next.
+      const loaded = await loadProfile(user.id, user.email);
+
+      // Copy Google's avatar into the profile on first sign-in.
+      const googleAvatar = user.user_metadata?.avatar_url ?? user.user_metadata?.picture;
+      if (loaded && !loaded.avatarUrl && typeof googleAvatar === "string") {
+        try {
+          const updated = await updateProfile(user.id, { avatarUrl: googleAvatar });
+          if (mounted.current) setProfile(updated);
+        } catch (err) {
+          console.warn("[auth] google avatar copy failed", err);
+        }
+      }
+
+      // A fresh Google account gets a profile row (DB trigger) with no
+      // username yet — send those users to profile setup.
+      const needsProfile = !loaded?.username;
+      return { cancelled: false, needsProfile };
+    } finally {
+      setBusy(false);
+    }
+  }, [loadProfile]);
+
   const signOut = useCallback(async () => {
     setBusy(true);
     try {
@@ -357,6 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetError,
       signUp,
       signIn,
+      signInWithGoogle,
       signOut,
       resetPassword,
       updatePassword,
@@ -376,6 +421,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetError,
       signUp,
       signIn,
+      signInWithGoogle,
       signOut,
       resetPassword,
       updatePassword,
