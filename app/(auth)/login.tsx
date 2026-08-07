@@ -14,20 +14,37 @@ import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
 import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
+import { GoogleButton } from "@/components/ui/GoogleButton";
+import { OrDivider } from "@/components/ui/OrDivider";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
 import { isValidEmail } from "@/lib/validation";
 
 export default function Login() {
   const router = useRouter();
-  const { signIn, busy } = useAuth();
+  const { signIn, signInWithGoogle, busy } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const failedAttemptsRef = useRef(0);
   const lastAttemptRef = useRef(0);
 
   const canSubmit = isValidEmail(email) && password.length > 0 && !busy;
+
+  const handleGoogle = async () => {
+    setError(null);
+    setGoogleBusy(true);
+    try {
+      const { cancelled, needsProfile } = await signInWithGoogle();
+      if (cancelled) return;
+      router.replace(needsProfile ? "/create-profile" : "/home");
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit) {
@@ -78,6 +95,8 @@ export default function Login() {
             contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 24, gap: 20 }}
             keyboardShouldPersistTaps="handled"
           >
+            <GoogleButton onPress={handleGoogle} loading={googleBusy} />
+            <OrDivider />
             <FormField
               label="Email"
               icon={<Mail size={16} color={colors.mutedForeground} />}
@@ -122,7 +141,7 @@ export default function Login() {
               block
               style={{ height: 52, borderRadius: 16 }}
               textStyle={{ fontSize: 16, fontWeight: "600" }}
-              disabled={busy}
+              disabled={busy || googleBusy}
               onPress={handleSubmit}
             >
               <AppText size="base" weight={600} color={colors.primaryForeground}>

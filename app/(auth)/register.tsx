@@ -14,6 +14,8 @@ import { PhoneShell, Screen } from "@/components/app/PhoneShell";
 import { TopBar } from "@/components/app/TopBar";
 import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
+import { GoogleButton } from "@/components/ui/GoogleButton";
+import { OrDivider } from "@/components/ui/OrDivider";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Progress } from "@/components/ui/Progress";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
@@ -42,13 +44,28 @@ const fields: Array<{
 
 export default function Register() {
   const router = useRouter();
-  const { signUp, busy } = useAuth();
+  const { signUp, signInWithGoogle, busy } = useAuth();
   const [values, setValues] = useState<Record<string, string>>({});
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const setField = (id: string, value: string) =>
     setValues((prev) => ({ ...prev, [id]: value }));
+
+  const handleGoogle = async () => {
+    setError(null);
+    setGoogleBusy(true);
+    try {
+      const { cancelled, needsProfile } = await signInWithGoogle();
+      if (cancelled) return;
+      router.replace(needsProfile ? "/create-profile" : "/home");
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
 
   const handleSubmit = async () => {
     const name = (values.name ?? "").trim();
@@ -117,6 +134,8 @@ export default function Register() {
             contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}
             keyboardShouldPersistTaps="handled"
           >
+            <GoogleButton onPress={handleGoogle} loading={googleBusy} />
+            <OrDivider />
             {fields.map(({ id, label, icon: Icon, placeholder, type, hint }) => (
               <View key={id} style={{ gap: 6 }}>
                 <FormField
@@ -169,7 +188,7 @@ export default function Register() {
               block
               size="lg"
               style={{ height: 52, borderRadius: radius.lg, marginTop: 4 }}
-              disabled={busy}
+              disabled={busy || googleBusy}
               onPress={handleSubmit}
             >
               <AppText size="base" weight={600} color={colors.primaryForeground}>

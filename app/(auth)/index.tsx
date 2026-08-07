@@ -6,11 +6,33 @@ import { colors, gradientBrandEnd, radius, gutter, shadows } from "@/theme";
 import { AppText } from "@/components/ui/AppText";
 import { PhoneShell } from "@/components/app/PhoneShell";
 import { RiseIn } from "@/components/ui/animations";
+import { GoogleButton } from "@/components/ui/GoogleButton";
+import { OrDivider } from "@/components/ui/OrDivider";
+import { Button } from "@/components/ui/Button";
+import { useAuth, authErrorMessage } from "@/context/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
+import { useState } from "react";
 
 export default function Welcome() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { signInWithGoogle } = useAuth();
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGoogle = async () => {
+    setError(null);
+    setGoogleBusy(true);
+    try {
+      const { cancelled, needsProfile } = await signInWithGoogle();
+      if (cancelled) return;
+      router.replace(needsProfile ? "/create-profile" : "/home");
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
 
   return (
     <PhoneShell>
@@ -70,27 +92,26 @@ export default function Welcome() {
           </AppText>
         </RiseIn>
 
-        <View style={{ paddingHorizontal: gutter, paddingBottom: 32 + insets.bottom, gap: 12 }}>
-          <Pressable
+        <View style={{ paddingHorizontal: gutter, paddingBottom: 32 + insets.bottom, gap: 14 }}>
+          <GoogleButton onPress={handleGoogle} loading={googleBusy} />
+          <OrDivider />
+          <Button
+            variant="secondary"
+            size="lg"
+            block
+            style={{ height: 52, borderRadius: radius.lg }}
             onPress={() => router.push("/register")}
-            style={({ pressed }) => [
-              {
-                height: 52,
-                borderRadius: radius.lg,
-                backgroundColor: colors.primary,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                opacity: pressed ? 0.9 : 1,
-              },
-            ]}
           >
-            <AppText size="base" weight={600} color={colors.primaryForeground}>
-              Create an account
+            <AppText size="base" weight={600} color={colors.secondaryForeground}>
+              Continue with email
             </AppText>
-            <ArrowRight size={16} color={colors.primaryForeground} />
-          </Pressable>
+            <ArrowRight size={16} color={colors.secondaryForeground} />
+          </Button>
+          {error ? (
+            <AppText size="xs" color={colors.destructive} style={{ textAlign: "center", lineHeight: 18 }}>
+              {error}
+            </AppText>
+          ) : null}
           <Pressable
             onPress={() => router.push("/login")}
             style={({ pressed }) => [
