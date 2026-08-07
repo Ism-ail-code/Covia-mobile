@@ -29,6 +29,14 @@ const MESSAGE_FRAGMENTS: Array<[string, string]> = [
   ["Network request failed", "You're offline. Check your connection and try again."],
   ["Failed to fetch", "You're offline. Check your connection and try again."],
   ["NetworkError", "You're offline. Check your connection and try again."],
+  [
+    "Token has expired or is invalid",
+    "That code is invalid or has expired. Check your email and try again, or request a new code.",
+  ],
+  [
+    "token has expired or is invalid",
+    "That code is invalid or has expired. Check your email and try again, or request a new code.",
+  ],
 ];
 
 export class AuthErrorDisplay extends Error {

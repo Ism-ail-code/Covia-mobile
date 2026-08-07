@@ -77,6 +77,10 @@ type AuthContextValue = {
   }) => Promise<SignUpResult>;
   signIn: (email: string, password: string) => Promise<User>;
   signInWithGoogle: () => Promise<GoogleSignInResult>;
+  /** Send a 6-digit OTP code to the email address. */
+  sendOtp: (email: string) => Promise<void>;
+  /** Verify a 6-digit OTP code and install the session. */
+  verifyOtpEmail: (email: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -307,6 +311,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadProfile]);
 
+  const sendOtp = useCallback(async (email: string) => {
+    if (!isSupabaseConfigured) {
+      throw new AuthErrorDisplay(
+        "Authentication is not configured yet. Add your Supabase keys to .env and restart the app.",
+      );
+    }
+    setBusy(true);
+    try {
+      // shouldCreateUser: false — OTP must never mint accounts on its own;
+      // it only emails an existing (e.g. just-signed-up) user.
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: { shouldCreateUser: false },
+      });
+      if (error) throw error;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const verifyOtpEmail = useCallback(
+    async (email: string, token: string) => {
+      if (!isSupabaseConfigured) {
+        throw new AuthErrorDisplay(
+          "Authentication is not configured yet. Add your Supabase keys to .env and restart the app.",
+        );
+      }
+      setBusy(true);
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: email.trim().toLowerCase(),
+          token: token.trim(),
+          type: "email",
+        });
+        if (error) throw error;
+        const user = data.user;
+        if (!user) {
+          throw new AuthErrorDisplay(
+            "The code was accepted, but no account was found. Please try again.",
+          );
+        }
+        await loadProfile(user.id, user.email);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [loadProfile],
+  );
+
   const signOut = useCallback(async () => {
     setBusy(true);
     try {
@@ -402,6 +455,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signIn,
       signInWithGoogle,
+      sendOtp,
+      verifyOtpEmail,
       signOut,
       resetPassword,
       updatePassword,
@@ -422,6 +477,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signIn,
       signInWithGoogle,
+      sendOtp,
+      verifyOtpEmail,
       signOut,
       resetPassword,
       updatePassword,
