@@ -45,7 +45,6 @@ function isCancelledError(err: unknown): boolean {
       ? ((err as { code?: unknown }).code ?? "")
       : "";
   return (
-    code === GoogleSignin.SIGN_IN_CANCELLED ||
     code === "-5" ||
     code === "SIGN_IN_CANCELLED" ||
     (err instanceof Error && err.message.includes("cancelled"))
@@ -81,7 +80,8 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   let idToken: string;
   try {
     const response = await GoogleSignin.signIn();
-    idToken = response.idToken ?? "";
+    if (response.type === "cancelled") return { cancelled: true };
+    idToken = response.data.idToken ?? "";
   } catch (err) {
     if (isCancelledError(err)) return { cancelled: true };
     console.warn("[google] signIn failed", err);

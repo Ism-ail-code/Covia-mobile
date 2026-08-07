@@ -18,6 +18,7 @@ import { GoogleButton } from "@/components/ui/GoogleButton";
 import { OrDivider } from "@/components/ui/OrDivider";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Progress } from "@/components/ui/Progress";
+import { RiseIn } from "@/components/ui/animations";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
 import { isValidEmail, validatePassword, validatePhone } from "@/lib/validation";
 
@@ -134,8 +135,10 @@ export default function Register() {
             contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}
             keyboardShouldPersistTaps="handled"
           >
-            <GoogleButton onPress={handleGoogle} loading={googleBusy} />
-            <OrDivider />
+            <RiseIn style={{ gap: 16 }}>
+              <GoogleButton onPress={handleGoogle} loading={googleBusy} />
+              <OrDivider />
+            </RiseIn>
             {fields.map(({ id, label, icon: Icon, placeholder, type, hint }) => (
               <View key={id} style={{ gap: 6 }}>
                 <FormField

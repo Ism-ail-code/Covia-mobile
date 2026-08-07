@@ -16,6 +16,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { GoogleButton } from "@/components/ui/GoogleButton";
 import { OrDivider } from "@/components/ui/OrDivider";
+import { RiseIn, Stagger } from "@/components/ui/animations";
 import { useAuth, authErrorMessage } from "@/context/AuthContext";
 import { isValidEmail } from "@/lib/validation";
 
@@ -95,69 +96,73 @@ export default function Login() {
             contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 24, gap: 20 }}
             keyboardShouldPersistTaps="handled"
           >
-            <GoogleButton onPress={handleGoogle} loading={googleBusy} />
-            <OrDivider />
-            <FormField
-              label="Email"
-              icon={<Mail size={16} color={colors.mutedForeground} />}
-              placeholder="you@example.com"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-            />
-            <FormField
-              label="Password"
-              icon={<Lock size={16} color={colors.mutedForeground} />}
-              placeholder="••••••••"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              rightIcon={
-                <Pressable
-                  onPress={() => setShowPassword((v) => !v)}
-                  hitSlop={8}
-                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                  accessibilityRole="button"
-                >
-                  <Eye size={16} color={colors.mutedForeground} />
+            <RiseIn style={{ gap: 20 }}>
+              <GoogleButton onPress={handleGoogle} loading={googleBusy} />
+              <OrDivider />
+              <FormField
+                label="Email"
+                icon={<Mail size={16} color={colors.mutedForeground} />}
+                placeholder="you@example.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <FormField
+                label="Password"
+                icon={<Lock size={16} color={colors.mutedForeground} />}
+                placeholder="••••••••"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                rightIcon={
+                  <Pressable
+                    onPress={() => setShowPassword((v) => !v)}
+                    hitSlop={8}
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    accessibilityRole="button"
+                  >
+                    <Eye size={16} color={colors.mutedForeground} />
+                  </Pressable>
+                }
+              />
+              <View style={{ alignItems: "flex-end" }}>
+                <Pressable onPress={() => router.push("/forgot-password")}>
+                  <AppText size="xs" weight={600} color={colors.primary}>
+                    Forgot password?
+                  </AppText>
                 </Pressable>
-              }
-            />
-            <View style={{ alignItems: "flex-end" }}>
-              <Pressable onPress={() => router.push("/forgot-password")}>
-                <AppText size="xs" weight={600} color={colors.primary}>
-                  Forgot password?
+              </View>
+              {error ? (
+                <AppText size="xs" color={colors.destructive} style={{ lineHeight: 18 }}>
+                  {error}
                 </AppText>
-              </Pressable>
-            </View>
-            {error ? (
-              <AppText size="xs" color={colors.destructive} style={{ lineHeight: 18 }}>
-                {error}
-              </AppText>
-            ) : null}
-            <Button
-              size="lg"
-              block
-              style={{ height: 52, borderRadius: 16 }}
-              textStyle={{ fontSize: 16, fontWeight: "600" }}
-              disabled={busy || googleBusy}
-              onPress={handleSubmit}
-            >
-              <AppText size="base" weight={600} color={colors.primaryForeground}>
-                {busy ? "Logging in…" : "Log in"}
-              </AppText>
-            </Button>
-            <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "baseline" }}>
-              <AppText size="sm" color={colors.mutedForeground}>
-                New to Covia?{" "}
-              </AppText>
-              <Pressable onPress={() => router.push("/register")}>
-                <AppText size="sm" weight={600} color={colors.primary}>
-                  Create an account
+              ) : null}
+            </RiseIn>
+            <Stagger index={1}>
+              <Button
+                size="lg"
+                block
+                style={{ height: 52, borderRadius: 16 }}
+                textStyle={{ fontSize: 16, fontWeight: "600" }}
+                disabled={busy || googleBusy}
+                onPress={handleSubmit}
+              >
+                <AppText size="base" weight={600} color={colors.primaryForeground}>
+                  {busy ? "Logging in…" : "Log in"}
                 </AppText>
-              </Pressable>
-            </View>
+              </Button>
+              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "baseline", marginTop: 16 }}>
+                <AppText size="sm" color={colors.mutedForeground}>
+                  New to Covia?{" "}
+                </AppText>
+                <Pressable onPress={() => router.push("/register")}>
+                  <AppText size="sm" weight={600} color={colors.primary}>
+                    Create an account
+                  </AppText>
+                </Pressable>
+              </View>
+            </Stagger>
           </ScrollView>
         </Screen>
       </KeyboardAvoidingView>
