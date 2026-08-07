@@ -51,7 +51,8 @@
         {
           "faceIDPermission": "Allow Covia to use Face ID to confirm that you are safe."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "router": {},
