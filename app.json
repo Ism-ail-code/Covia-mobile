@@ -14,10 +14,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.covia.mobile"
+      "bundleIdentifier": "app.covia.mobile",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "googleSignIn": {
+        "reservedClientId": "com.googleusercontent.apps.REPLACE_WITH_IOS_CLIENT_ID"
+      }
     },
     "android": {
       "package": "app.covia.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
