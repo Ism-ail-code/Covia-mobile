@@ -60,6 +60,9 @@ export default function Verify() {
         await sendOtp(email);
         setCountdown(RESEND_COOLDOWN);
       } catch (err) {
+        // If the code never went out (e.g. rate limit), don't lock the
+        // resend button behind a phantom countdown.
+        setCountdown(0);
         setError(authErrorMessage(err));
       }
     },

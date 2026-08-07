@@ -74,12 +74,19 @@ export default function Login() {
       const user = await signIn(email, password);
       failedAttemptsRef.current = 0;
       if (!user.email_confirmed_at) {
-        router.replace("/verify");
+        // Unverified account — complete verification with an OTP code.
+        router.replace({ pathname: "/verify", params: { email } });
       } else {
         router.replace("/home");
       }
     } catch (err) {
       failedAttemptsRef.current += 1;
+      if ((err as { code?: string })?.code === "email_not_confirmed") {
+        // Supabase refused the login because the email is unverified —
+        // hand the user over to the OTP screen instead of just an error.
+        router.replace({ pathname: "/verify", params: { email } });
+        return;
+      }
       setError(authErrorMessage(err));
     }
   };

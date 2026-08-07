@@ -162,3 +162,30 @@ sequenceDiagram
 - [ ] Session restored on relaunch; logout clears everything
 - [ ] Unverified login still gated by `canAccessApp` (emailVerified)
 - [ ] Existing email signup (non-OTP path removed only on the client) — no server behaviour change
+
+---
+
+## 6. Security review — Phase D findings (post-implementation)
+
+Verified after implementation; no code changes were required for any item
+except the two fixes listed at the end.
+
+| # | Check | Result |
+| - | ----- | ------ |
+| 1 | **Sessions refresh correctly** | ✅ `src/services/supabase.ts` untouched — `autoRefreshToken: true`, AsyncStorage persistence, PKCE flowType. All new methods (`signInWithIdToken`, `verifyOtp`) install sessions through the same client/refresh path. |
+| 2 | **Google users get profile creation** | ✅ `handle_new_user` trigger (migration 0001) fires on `auth.users` insert and carries Google's `full_name`; `ensureProfile()` remains the client fallback; avatar copied from Google metadata on first sign-in (non-fatal on failure). |
+| 3 | **OTP cannot be abused** | ✅ `shouldCreateUser: false` (OTP never mints accounts); Supabase server-side 60 s request throttle + 1 h expiry + `verifyOtp` attempt caps; client 60 s resend countdown. |
+| 4 | **Rate limiting still works** | ✅ Password-login exponential backoff in `login.tsx` untouched. |
+| 5 | **RLS unchanged** | ✅ Zero DB migrations/grants/policies touched (verified via `git log --name-only` for the phase). |
+| 6 | **Existing RPCs continue working** | ✅ None modified. |
+
+### Edge-case fixes applied during QA
+
+1. **`email_not_confirmed` login error** — a login with an unverified email
+   now routes the user to the OTP screen (with the email forwarded) instead
+   of showing a dead-end error message (`app/(auth)/login.tsx`).
+2. **Phantom resend countdown** — if the OTP email fails to send (e.g.
+   server rate limit), the 60 s countdown resets so the user can retry
+   immediately (`app/(auth)/verify.tsx`).
+3. Outdated "confirmation link" copy on the `email_not_confirmed` mapping
+   updated to "verification code" (`src/services/authErrors.ts`).

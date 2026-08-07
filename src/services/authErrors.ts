@@ -13,7 +13,7 @@ const CODE_MESSAGES: Record<string, string> = {
   email_exists: "An account with this email already exists. Try logging in instead.",
   invalid_credentials: "Incorrect email or password. Please try again.",
   weak_password: "That password is too weak. Use at least 8 characters with a mix of letters, numbers and symbols.",
-  email_not_confirmed: "Please verify your email before logging in. We've sent you a confirmation link.",
+  email_not_confirmed: "Please verify your email before logging in. We've sent you a verification code.",
   over_email_send_rate_limit: "Too many emails sent. Please wait a minute and try again.",
   over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
   user_not_found: "No account found with this email.",
