@@ -15,7 +15,9 @@
 import { supabase } from "./supabase";
 import {
   DEFAULT_PROFILE,
+  DEFAULT_ONBOARDING_STEP,
   type EmergencyContact,
+  type OnboardingStep,
   type PublicProfile,
   type UserProfile,
 } from "../types/profile";
@@ -40,6 +42,8 @@ type ProfileRow = {
   total_cancelled_rides: number | null;
   is_government_id_verified: boolean | null;
   is_student_verified: boolean | null;
+  onboarding_step: OnboardingStep | null;
+  onboarding_completed: boolean | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
   emergency_contact_relationship: string | null;
@@ -79,6 +83,7 @@ function mapEmergencyContact(row: ProfileRow): EmergencyContact | null {
 
 function mapRow(row: ProfileRow): UserProfile {
   const emailPrefix = (row.email ?? "").split("@")[0] || "Traveller";
+  const onboardingStep = row.onboarding_step ?? DEFAULT_ONBOARDING_STEP;
   return {
     id: row.id,
     email: row.email,
@@ -99,6 +104,8 @@ function mapRow(row: ProfileRow): UserProfile {
     totalCancelledRides: row.total_cancelled_rides ?? DEFAULT_PROFILE.totalCancelledRides,
     isGovernmentIdVerified: row.is_government_id_verified ?? false,
     isStudentVerified: row.is_student_verified ?? false,
+    onboardingStep,
+    onboardingCompleted: row.onboarding_completed ?? onboardingStep === "complete",
     emergencyContact: mapEmergencyContact(row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -215,6 +222,29 @@ export async function updateProfile(
     .select("*")
     .single();
 
+  if (error) throw error;
+  return mapRow(data as ProfileRow);
+}
+
+/**
+ * Advance the onboarding lifecycle. `complete` also flips the
+ * onboarding_completed flag in the same update.
+ */
+export async function setOnboardingStep(
+  userId: string,
+  step: OnboardingStep,
+): Promise<UserProfile> {
+  const completed = step === "complete";
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      onboarding_step: step,
+      onboarding_completed: completed,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
   if (error) throw error;
   return mapRow(data as ProfileRow);
 }

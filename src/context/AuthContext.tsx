@@ -30,10 +30,11 @@ import { supabase, isSupabaseConfigured } from "../services/supabase";
 import {
   ensureProfile,
   fetchProfile,
+  setOnboardingStep as setOnboardingStepService,
   updateProfile,
   type ProfilePatch,
 } from "../services/profiles";
-import type { UserProfile } from "../types/profile";
+import type { OnboardingStep, UserProfile } from "../types/profile";
 import { AuthErrorDisplay, toFriendlyAuthError } from "../services/authErrors";
 import { isAdmin as isAdminRpc, currentAdminRole as currentAdminRoleRpc } from "../services/admin";
 import { signInWithGoogle as googleSignIn } from "../services/googleAuth";
@@ -59,6 +60,17 @@ type AuthContextValue = {
   profile: UserProfile | null;
   /** True when the account's email has been confirmed. */
   emailVerified: boolean;
+  /**
+   * Where the user is in the onboarding lifecycle ('complete' when the
+   * profile hasn't loaded yet — the router keeps the splash up via
+   * `stepReady` until it has).
+   */
+  onboardingStep: OnboardingStep;
+  onboardingCompleted: boolean;
+  /** True once the profile row has loaded (or failed) after auth. */
+  stepReady: boolean;
+  /** Advance the onboarding lifecycle, persisting to the profile row. */
+  setOnboardingStep: (step: OnboardingStep) => Promise<UserProfile>;
   /** Null until the admin check resolves; false for regular members. */
   isAdmin: boolean | null;
   /** The signed-in admin's role name (e.g. "super_admin"); null otherwise. */
@@ -108,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [stepReady, setStepReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -125,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const p = await ensureProfile({ userId, email });
       if (mounted.current) setProfile(p);
+      if (mounted.current) setStepReady(true);
       return p;
     } catch (err) {
       console.warn("[auth] profile load failed", err);
@@ -132,6 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const fallback = await fetchProfile(userId).catch(() => null);
         if (fallback && mounted.current) setProfile(fallback);
       }
+      // Even a failed load resolves the step decision — the router must
+      // not hang on the splash forever (falls back to 'complete').
+      if (mounted.current) setStepReady(true);
       return null;
     }
   }, []);
@@ -150,10 +167,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(next);
       setStatus(next ? "authenticated" : "unauthenticated");
       if (next) {
+        setStepReady(false);
         void loadProfile(next.user.id, next.user.email);
         void loadAdmin();
       } else {
         setProfile(null);
+        setStepReady(false);
         setIsAdmin(null);
         setAdminRole(null);
       }
@@ -440,6 +459,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session],
   );
 
+  const advanceOnboarding = useCallback(
+    async (step: OnboardingStep) => {
+      if (!session) throw new AuthErrorDisplay("You need to be logged in.");
+      const updated = await setOnboardingStepService(session.user.id, step);
+      if (mounted.current) setProfile(updated);
+      return updated;
+    },
+    [session],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -447,6 +476,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       profile,
       emailVerified,
+      onboardingStep: profile?.onboardingStep ?? "complete",
+      onboardingCompleted: profile?.onboardingCompleted ?? true,
+      stepReady,
+      setOnboardingStep: advanceOnboarding,
       isAdmin,
       adminRole,
       busy,
@@ -469,6 +502,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       emailVerified,
+      stepReady,
+      advanceOnboarding,
       isAdmin,
       adminRole,
       busy,

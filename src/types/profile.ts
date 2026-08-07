@@ -11,6 +11,16 @@
 
 export type VerificationStatus = "Pending" | "In Review" | "Verified" | "Rejected";
 
+/**
+ * Onboarding lifecycle, persisted on the profile row (migration 0044)
+ * so reinstalls can't bypass it:
+ *   onboard  → post-verification welcome screens
+ *   profile  → profile setup (create-profile)
+ *   verify   → identity verification introduction
+ *   complete → normal app (tabs)
+ */
+export type OnboardingStep = "onboard" | "profile" | "verify" | "complete";
+
 export const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say"] as const;
 export type Gender = (typeof GENDERS)[number];
 
@@ -44,6 +54,10 @@ export type UserProfile = {
   totalCancelledRides: number;
   isGovernmentIdVerified: boolean;
   isStudentVerified: boolean;
+  /** Where the user is in the onboarding lifecycle. */
+  onboardingStep: OnboardingStep;
+  /** Mirrors onboardingStep === "complete". */
+  onboardingCompleted: boolean;
   /** Private — all-or-nothing. */
   emergencyContact: EmergencyContact | null;
   createdAt: string;
@@ -90,3 +104,6 @@ export const DEFAULT_PROFILE: Pick<
   isGovernmentIdVerified: false,
   isStudentVerified: false,
 };
+
+/** Default onboarding step for a brand-new profile row. */
+export const DEFAULT_ONBOARDING_STEP: OnboardingStep = "onboard";
